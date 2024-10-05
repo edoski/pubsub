@@ -30,7 +30,6 @@ public class ClientHandler implements Runnable {
 			try {
 				clientMessage = in.readLine();
 				broadcastMessage(clientMessage);
-
 			} catch (IOException e) {
 				closeEverything(socket, in, out);
 				break;
@@ -41,13 +40,11 @@ public class ClientHandler implements Runnable {
 	public void broadcastMessage(String message) {
 		for (ClientHandler clientHandler : clientHandlers) {
 			try {
-				if (clientHandler.clientUsername.equals(clientUsername)) {
-					continue;
+				if (!clientHandler.clientUsername.equals(clientUsername)) {
+					clientHandler.out.write(message);
+					clientHandler.out.newLine();
+					clientHandler.out.flush();
 				}
-
-				clientHandler.out.write(message);
-				clientHandler.out.newLine();
-				clientHandler.out.flush();
 			} catch (IOException e) {
 				closeEverything(socket, in, out);
 			}
