@@ -19,6 +19,20 @@ public class Client {
 		}
 	}
 
+	public void listenForMessages() {
+		new Thread(() -> {
+			String message;
+			try {
+				while (socket.isConnected()) {
+					message = in.readLine();
+					System.out.println(message);
+				}
+			} catch (IOException e) {
+				closeEverything(socket, in, out);
+			}
+		}).start();
+	}
+
 	public void sendMessage() {
 		try {
 			out.write(username);
@@ -48,6 +62,21 @@ public class Client {
 			if (out != null) {
 				out.close();
 			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public static void main(String[] args) {
+		Scanner scanner = new Scanner(System.in);
+		System.out.print("ENTER USERNAME: ");
+		String username = scanner.nextLine();
+
+		try {
+			Socket socket = new Socket("localhost", 1234);
+			Client client = new Client(socket, username);
+			client.listenForMessages();
+			client.sendMessage();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
