@@ -6,4 +6,4 @@ Come gestiamo la memoria dei messaggi?
   - Local (ES. File di testo)
   - Cloud (ES. Firestore, MongoDB)
 - Non-persistente
-  - Talvolta che riparte Server si comincia a fresco
+  - Talvolta che riparte Server.Server si comincia a fresco
