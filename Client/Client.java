@@ -10,6 +10,8 @@ public class Client {
 	private BufferedWriter out;
 	private String username;
 
+
+
 	public Client(Socket socket, String username) {
 		try {
 			this.username = username;
@@ -70,6 +72,18 @@ public class Client {
 	}
 
 	public static void main(String[] args) {
+
+		/*
+		if (args.length < 1) {
+			System.err.println("Usage: java publishSubscribe.Server <port>");
+			return;
+		}
+
+		int port = Integer.parseInt(args[0]);
+		*/
+
+
+		Scanner userInput = new Scanner(System.in);
 		Scanner scanner = new Scanner(System.in);
 		System.out.print("ENTER USERNAME: ");
 		String username = scanner.nextLine();
