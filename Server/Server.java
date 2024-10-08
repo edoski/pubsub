@@ -1,6 +1,7 @@
 package Server;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Scanner;
@@ -23,13 +24,40 @@ public class Server {
 			 * principale ascoltiamo solo l'input da tastiera dell'utente (in caso voglia
 			 * chiudere il programma)
 			 */
+
 			Thread serverThread = new Thread(new SocketListener(server));
 			serverThread.start();
 
-			String command = "";
 
-			while (!command.equals("quit")) {
-				command = userInput.nextLine();
+			boolean closed = true;
+			while (closed) {
+				String command = userInput.nextLine();
+				String[] parts = command.split(" ");
+
+				switch (parts[0]) {
+					case "show":
+						System.out.println("show");
+
+						break;
+					case "inspect":
+						System.out.println("inspect");
+						if (parts.length > 1) {
+							String key = parts[1];
+							System.out.println("key: " + key);
+
+							//Proverò a usare serverThread.wait() per bloccare il thread principale
+							//serverThread.wait();
+						}
+
+						break;
+					case "quit":
+						System.out.println("quit");
+						closed = false;
+						break;
+
+					default:
+						System.out.println("unknown command");
+				}
 			}
 
 			try {

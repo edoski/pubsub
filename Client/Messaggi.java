@@ -12,10 +12,10 @@ public class Messaggi {
     private String testo;
     private LocalDate date;
 
-    public Messaggi(int id, String testo, LocalDate date){
+    public Messaggi(String testo){
         this.id = ++instanceCount;
         this.testo = testo;
-        this.date = date;
+        this.date = date.now();
     }
 
     public int getId(){

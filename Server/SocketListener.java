@@ -20,7 +20,8 @@ public class SocketListener implements Runnable {
             //without this line, the server will wait indefinitely for a client to connect,
             //and even if the main thread is interrupted, the server will not stop
             //until a client connects
-            this.server.setSoTimeout(5000);
+
+            this.server.setSoTimeout(8000);
             while (!Thread.interrupted()) {
                 try {
                     System.out.println("Waiting for a new client...");
