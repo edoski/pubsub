@@ -7,8 +7,6 @@ import java.util.ArrayList;
 public class ClientHandler implements Runnable {
 	public static ArrayList<ClientHandler> clientHandlers = new ArrayList<>();
 
-
-
 	private Socket socket;
 	private BufferedReader in;
 	private BufferedWriter out;
