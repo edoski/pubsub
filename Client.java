@@ -5,6 +5,8 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.Scanner;
 
+// todo: add documentation above each method (same style as algo project)
+
 public class Client {
 	private Socket socket;
 	private BufferedReader in;
@@ -24,6 +26,7 @@ public class Client {
 	}
 
 	private void start() {
+		System.out.println("> Connected to the server. Type 'help' for a list of available commands.");
 		// Start the receiveMessage thread
 		receiveMessage();
 
@@ -41,13 +44,45 @@ public class Client {
 				switch (command) {
 					case "help":
 						System.out.println("--- AVAILABLE COMMANDS ---");
-						System.out.println("- [publish | subscribe] <topic>: Register as a publisher (read & write) / subscriber (read-only) for the specified topic");
+						if (userRole == null) {
+							System.out.println("- [publish | subscribe] <topic>: Register as a publisher (read & write) / subscriber (read-only) for the specified topic");
+						} else if (isPublisher()) {
+							System.out.println("- send <message>: Send a message to the server");
+						}
 						System.out.println("- show: Show available topics");
 						System.out.println("- quit: Disconnect from the server");
 						break;
+					case "send":
+						if (userRole == null) {
+							System.out.println("> You need to register as a publisher first.");
+						} else if (isPublisher()) {
+							if (tokens.length < 2) {
+								System.out.println("> Usage: send <message>");
+							} else {
+								StringBuilder message = new StringBuilder();
+								for (int i = 1; i < tokens.length; i++) {
+									message.append(tokens[i]).append(" ");
+								}
+								out.println(message);
+							}
+						} else {
+							System.out.println("> You are registered as a subscriber. You cannot send messages.");
+						}
+						break;
+					case "show":
+						if (ClientHandler.messages.isEmpty()) {
+							System.out.println("> No topics available.");
+						} else {
+							System.out.println("--- TOPICS ---");
+							for (String topic : ClientHandler.messages.keySet()) {
+								System.out.println(topic);
+							}
+						}
+						break;
 					case "quit":
-						System.out.println("DISCONNECTING...");
-						running = false;
+						System.out.println("> DISCONNECTING...");
+						// Send a special "QUIT" message to the server, signaling the client's intention to disconnect
+						out.println("QUIT");
 						closeEverything();
 						break;
 					case "publish":
@@ -62,53 +97,32 @@ public class Client {
 								// Send userRole and topic to the server
 								out.println(userRole + " " + topic);
 
-								System.out.println("Successfully registered with role '" + userRole + "' on topic '" + topic + "'.");
+								System.out.println("> Successfully registered with role '" + userRole + "' on topic '" + topic + "'.");
 
 								// For publishers, prompt that they can start sending messages
 								if (isPublisher()) {
-									System.out.println("You can start sending messages. Type 'help' for a list of available commands or 'quit' to exit.");
+									System.out.println("> You can start sending messages. Type 'help' for a list of available commands or 'quit' to exit.\n");
 								}
 							} else {
-								System.out.println("Usage: " + command + " <topic_name>");
+								System.out.println("> Usage: " + command + " <topic_name>");
 							}
 						} else {
-							System.out.println("You have already registered as '" + userRole + "' for topic '" + topic + "'.");
-						}
-						break;
-					case "show":
-						if (ClientHandler.messages.isEmpty()) {
-							System.out.println("No topics available.");
-						} else {
-							System.out.println("--- TOPICS ---");
-							for (String topic : ClientHandler.messages.keySet()) {
-								System.out.println(topic);
-							}
+							System.out.println("> You have already registered as '" + userRole + "' for topic '" + topic + "'.");
 						}
 						break;
 					default:
-						if (userRole == null) {
-							System.out.println("Unknown command. Please register first using 'publish <topic>' or 'subscribe <topic>'.");
-						} else if (isPublisher()) {
-//							TODO: turn this into a case "send" above
-							// Publishers can send messages
-							out.println(inputLine);
-							out.flush();
-						} else {
-							// Subscribers can only send commands
-							System.out.println("Unknown command.");
-						}
+						System.out.println("> Unknown command. Enter 'help' to see the list of available commands.");
 						break;
 				}
 			}
 		} catch (Exception e) {
 			if (running) {
-				System.out.println("Error reading from console: " + e.getMessage());
+				System.out.println("> Error reading from console: " + e.getMessage());
 				running = false;
 				closeEverything();
 			}
 		}
 	}
-
 
 	public void receiveMessage() {
 		new Thread(() -> {
@@ -118,14 +132,12 @@ public class Client {
 					if (messageFromServer != null) {
 						System.out.println(messageFromServer);
 					} else {
-						System.out.println("Server has closed the connection.");
-						running = false;
 						closeEverything();
-						break; // Exit the loop
+						break; // Server disconnected
 					}
 				} catch (IOException e) {
 					if (running) {
-						System.out.println("Connection lost: " + e.getMessage());
+						System.out.println("> Connection lost: " + e.getMessage());
 						running = false;
 						closeEverything();
 					}
@@ -135,18 +147,16 @@ public class Client {
 		}).start();
 	}
 
-
 	private void closeEverything() {
+		System.out.println("--- CLIENT SHUTDOWN ---");
 		running = false;
 		try {
-			System.out.println("Connection closed. Exiting...");
+			// Important: Close the socket first to prevent the client from sending more messages
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
-//			Necessary, do not remove
-			System.exit(0);
 		} catch (IOException e) {
-			System.out.println("Error closing resources: " + e.getMessage());
+			System.out.println("> Error closing resources: " + e.getMessage());
 		}
 	}
 
@@ -156,7 +166,7 @@ public class Client {
 
 	public static void main(String[] args) {
 		if (args.length < 2) {
-			System.out.println("Usage: java Client <hostname> <port>");
+			System.out.println("> Usage: java Client <hostname> <port>");
 			return;
 		}
 
@@ -166,7 +176,7 @@ public class Client {
 
 			client.start();
 		} catch (IOException e) {
-			System.out.println("Unable to connect to the server.");
+			System.out.println("> Unable to connect to the server.");
 		}
 	}
 }

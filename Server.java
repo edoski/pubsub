@@ -53,12 +53,12 @@ public class Server {
 			String command = scanner.nextLine();
 			switch (command) {
 				case "quit":
-					System.out.println("(PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
+					System.out.println("> (PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 					shutdownServer();
 					break;
 				case "show":
 					if (ClientHandler.messages.isEmpty()) {
-						System.out.println("No topics available.");
+						System.out.println("> No topics available.");
 					} else {
 						System.out.println("--- TOPICS ---");
 						for (String topic : ClientHandler.messages.keySet()) {
@@ -71,7 +71,7 @@ public class Server {
 					System.out.println("Inspecting...");
 					break;
 				default:
-					System.out.println("Unknown command.");
+					System.out.println("> Unknown command.");
 			}
 		}
 	}
@@ -93,12 +93,12 @@ public class Server {
 
 			pool.shutdownNow();
 
-			System.out.println("(POST-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
+			System.out.println("> (POST-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 
-		System.out.println("--- SERVER SHUT DOWN ---");
+		System.out.println("--- SERVER SHUTDOWN ---");
 		System.exit(0);
 	}
 

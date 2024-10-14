@@ -32,31 +32,32 @@ public class ClientHandler implements Runnable {
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 
-			System.out.println("Waiting for client to send role and topic...");
+			System.out.println("> Waiting for client to send role and topic...");
 
-			// If after 60 seconds the client has not sent role and topic, disconnect
-			this.socket.setSoTimeout(60000);
+			// Set a timeout for the initial read
+			this.socket.setSoTimeout(60000); // 60 seconds
 
 			String line = in.readLine();
-			if (line == null) {
-				System.out.println("Client disconnected before sending role and topic.");
-				interruptThread();
+			if (line == null || line.equals("QUIT")) {
+				System.out.println("> Client disconnected before sending role and topic.");
+				closeEverything(socket, in, out);
 				return;
 			}
 
+			// todo: maybe i'm just tired but check if this check is necessary
 			String[] userRoleAndTopic = line.split(" ");
 			if (userRoleAndTopic.length < 2) {
-				System.out.println("Invalid role and topic received from client.");
-				interruptThread();
+				System.out.println("> Invalid role and topic received from client.");
+				closeEverything(socket, in, out);
 				return;
 			}
 
 			this.userRole = userRoleAndTopic[0];
 			this.topic = userRoleAndTopic[1];
 
-			System.out.println("Client registered with role '" + userRole + "' on topic '" + topic + "'.");
+			System.out.println("> Client registered with role '" + userRole + "' on topic '" + topic + "'.");
 
-			// Set reasonable socket timeout for regular operations
+			// Set socket timeout for regular operations
 			this.socket.setSoTimeout(SOCKET_TIMEOUT);
 
 			// Main loop for handling client messages
@@ -65,6 +66,11 @@ public class ClientHandler implements Runnable {
 				try {
 					messageFromClient = in.readLine();  // Blocking call
 					if (messageFromClient != null) {
+						if (messageFromClient.equals("QUIT")) {
+							System.out.println("> Client requested to disconnect.");
+							interruptThread();
+							break;
+						}
 						// Process message
 						Message message = new Message(server.getNextMessageId(), topic, messageFromClient);
 						broadcastMessage(message.toString());
@@ -83,7 +89,7 @@ public class ClientHandler implements Runnable {
 				}
 			}
 		} catch (IOException e) {
-			System.out.println("IOException in ClientHandler: " + e.getMessage());
+			System.out.println("> IOException in ClientHandler: " + e.getMessage());
 		}
 	}
 
@@ -102,8 +108,9 @@ public class ClientHandler implements Runnable {
 
 	public void closeEverything(Socket socket, BufferedReader in, PrintWriter out) {
 		clientHandlers.remove(this);
-		System.out.println("Client handler removed. Current handlers: " + clientHandlers.size());
+		System.out.println("> Client handler removed. Current handlers: " + clientHandlers.size());
 		try {
+//			Important: Close the socket first to prevent the client from sending more messages
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
