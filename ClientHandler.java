@@ -1,4 +1,3 @@
-
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
@@ -12,7 +11,7 @@ public class ClientHandler implements Runnable {
 	private Socket socket;
 	private BufferedReader in;
 	private PrintWriter out;
-	private String clientRole;
+	private String userRole;
 	private String topic;
 	private boolean running = true;
 	private static final int SOCKET_TIMEOUT = 500; // 500 ms
@@ -21,16 +20,38 @@ public class ClientHandler implements Runnable {
 		try {
 			this.server = server;
 			this.socket = socket;
-			this.socket.setSoTimeout(SOCKET_TIMEOUT);
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 
-			String[] userRoleAndTopic = in.readLine().split(" ");
-			this.clientRole = userRoleAndTopic[0];
+			System.out.println("Waiting for client to send role and topic...");
+
+			String line = in.readLine();
+			if (line == null) {
+				System.out.println("Client disconnected before sending role and topic.");
+				closeEverything(socket, in, out);
+				return;
+			}
+
+			String[] userRoleAndTopic = line.split(" ");
+			if (userRoleAndTopic.length < 2) {
+				System.out.println("Invalid role and topic received from client.");
+				closeEverything(socket, in, out);
+				return;
+			}
+
+			this.userRole = userRoleAndTopic[0];
 			this.topic = userRoleAndTopic[1];
 
 			clientHandlers.add(this);
+			System.out.println("Client registered with role: " + userRole + ", topic: " + topic);
+
+			// Set the socket timeout after receiving the initial data
+			this.socket.setSoTimeout(SOCKET_TIMEOUT);
 		} catch (IOException e) {
+			System.out.println("IOException in ClientHandler constructor: " + e.getMessage());
+			closeEverything(socket, in, out);
+		} catch (Exception e) {
+			System.out.println("Exception in ClientHandler constructor: " + e.getMessage());
 			closeEverything(socket, in, out);
 		}
 	}
@@ -45,7 +66,6 @@ public class ClientHandler implements Runnable {
 				if (messageFromClient != null) {
 					Message message = new Message(server.getNextMessageId(), topic, messageFromClient);
 					broadcastMessage(message.toString());
-//					todo: replace "test" with topic variable
 					messages.putIfAbsent(topic, new CopyOnWriteArrayList<>());
 					messages.get(topic).add(message);
 				} else {
@@ -79,6 +99,7 @@ public class ClientHandler implements Runnable {
 	public void closeEverything(Socket socket, BufferedReader in, PrintWriter out) {
 		running = false;
 		clientHandlers.remove(this);
+		System.out.println("Client handler removed. Current handlers: " + clientHandlers.size());
 		try {
 			if (in != null) in.close();
 			if (out != null) out.close();

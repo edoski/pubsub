@@ -9,105 +9,138 @@ public class Client {
 	private Socket socket;
 	private BufferedReader in;
 	private PrintWriter out;
-	private static String userRole;
-	private static String topic;
+	private String userRole = null;
+	private String topic = null;
 	private volatile boolean running = true;
 
-	public Client(Socket socket, String[] userRoleAndTopic) {
+	public Client(Socket socket) {
 		try {
 			this.socket = socket;
-//			userRole = userRoleAndTopic[0];
-//			topic = userRoleAndTopic[1];
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 		} catch (IOException e) {
-			closeEverything(socket, in, out);
+			closeEverything();
 		}
 	}
 
-	public void sendMessage() {
-		out.println(userRole + " " + topic);
+	private void start() {
+		// Start the receiveMessage thread
+		receiveMessage();
 
-		new Thread(() -> {
-			Scanner scanner = new Scanner(System.in);
-			while (isPublisher() && running && socket.isConnected()) {
-				try {
-					String body = scanner.nextLine();
-					out.println(body);
-				} catch (Exception e) {
+		// Use the main thread for input handling
+		try (Scanner scanner = new Scanner(System.in)) {
+			while (running) {
+				String inputLine = scanner.nextLine();
+				if (!running) {
 					break;
 				}
+
+				String[] tokens = inputLine.trim().split("\\s+");
+				String command = tokens[0].toLowerCase();
+
+				if (userRole == null) {
+					// Handle commands before registration
+					switch (command) {
+						case "quit":
+							System.out.println("DISCONNECTING...");
+							running = false;
+							closeEverything();
+							break;
+						case "publish":
+						case "subscribe":
+							if (tokens.length >= 2) {
+								userRole = command;
+								topic = tokens[1];
+
+								// Send userRole and topic to the server
+								out.println(userRole + " " + topic);
+								out.flush();
+
+								System.out.println("Registered with role '" + userRole + "' on topic '" + topic + "'.");
+
+								if (isPublisher()) {
+									System.out.println("You can start sending messages. Type 'quit' to exit.");
+								}
+							} else {
+								System.out.println("Usage: " + command + " <topic_name>");
+							}
+							break;
+						default:
+							System.out.println("Unknown command. Register using '[publish | topic] <topic>' or 'quit' to exit.");
+					}
+				} else {
+					// After registration
+					if (command.equals("quit")) {
+						System.out.println("DISCONNECTING...");
+						running = false;
+						closeEverything();
+						break;
+					} else if (isPublisher()) {
+						// Publishers can send messages
+						out.println(inputLine);
+						out.flush();
+					} else {
+						// Subscribers can only send commands
+						System.out.println("Unknown command.");
+					}
+				}
 			}
-		}).start();
+		} catch (Exception e) {
+			if (running) {
+				System.out.println("Error reading from console: " + e.getMessage());
+				running = false;
+				closeEverything();
+			}
+		}
 	}
 
 	public void receiveMessage() {
 		new Thread(() -> {
-			String messageFromServer;
 			while (running && socket.isConnected()) {
 				try {
-					messageFromServer = in.readLine();
+					String messageFromServer = in.readLine();
 					if (messageFromServer != null) {
 						System.out.println(messageFromServer);
-					} else {
-						System.out.println("Server has closed the connection.");
-						running = false;
-						closeEverything(socket, in, out);
 					}
 				} catch (IOException e) {
-					running = false;
-					closeEverything(socket, in, out);
+					if (running) {
+						System.out.println("Connection lost: " + e.getMessage());
+						running = false;
+						closeEverything();
+					}
 					break;
 				}
 			}
 		}).start();
 	}
 
-	private void closeEverything(Socket socket, BufferedReader in, PrintWriter out) {
+	private void closeEverything() {
 		running = false;
 		try {
 			System.out.println("Connection closed. Exiting...");
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
-			System.in.close(); // Close System.in to interrupt scanner.nextLine()
 		} catch (IOException e) {
-			throw new RuntimeException(e);
+			System.out.println("Error closing resources: " + e.getMessage());
 		}
 	}
 
-	public static boolean isPublisher() {
-		return userRole.equalsIgnoreCase("publish");
-	}
-	public static boolean isSubscriber() {
-		return userRole.equalsIgnoreCase("subscribe");
+	public boolean isPublisher() {
+		return userRole != null && userRole.equalsIgnoreCase("publish");
 	}
 
 	public static void main(String[] args) {
+		if (args.length < 2) {
+			System.out.println("Usage: java Client <hostname> <port>");
+			return;
+		}
+
 		try {
-			Scanner scanner = new Scanner(System.in);
-//			publish or subscribe, topic: e.g. publish test
-			String[] userRoleAndTopic;
-			do {
-				System.out.print("Enter 'publish' or 'subscribe' followed by a topic: ");
-				userRoleAndTopic = scanner.nextLine().split(" ");
-				userRole = userRoleAndTopic[0];
-				StringBuilder topic = new StringBuilder();
-				for (int i = 1; i < userRoleAndTopic.length; i++) {
-					topic.append(userRoleAndTopic[i]).append(" ");
-				}
-				Client.topic = topic
-						.toString()
-						.replace(" ", "_")
-						.substring(0, topic.length() - 1);
-			} while (!isPublisher() && !isSubscriber());
-
 			Socket socket = new Socket(args[0], Integer.parseInt(args[1]));
-			Client client = new Client(socket, userRoleAndTopic);
+			Client client = new Client(socket);
 
-//            Receive messages from separate thread, so that it doesn't block the main thread (to send messages)
-			client.receiveMessage();
-			client.sendMessage();
+			client.start();
 		} catch (IOException e) {
 			System.out.println("Unable to connect to the server.");
 		}

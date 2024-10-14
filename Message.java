@@ -11,7 +11,7 @@ public class Message {
 	public Message(int uuid, String topic, String message) {
 		this.uuid = uuid;
 		this.topic = topic;
-		this.message = message.replaceAll("(.{80})", "$1\n");
+		this.message = message.replaceAll("(.{80})", "$1\n"); // Wrap lines at 80 characters
 		timestamp.setTime(timestamp.getTime());
 	}
 
