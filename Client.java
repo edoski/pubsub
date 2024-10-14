@@ -30,59 +30,74 @@ public class Client {
 		// Use the main thread for input handling
 		try (Scanner scanner = new Scanner(System.in)) {
 			while (running) {
-				String inputLine = scanner.nextLine();
 				if (!running) {
 					break;
 				}
 
+				String inputLine = scanner.nextLine();
 				String[] tokens = inputLine.trim().split("\\s+");
 				String command = tokens[0].toLowerCase();
 
-				if (userRole == null) {
-					// Handle commands before registration
-					switch (command) {
-						case "quit":
-							System.out.println("DISCONNECTING...");
-							running = false;
-							closeEverything();
-							break;
-						case "publish":
-						case "subscribe":
-							if (tokens.length >= 2) {
-								userRole = command;
-								topic = tokens[1];
-
-								// Send userRole and topic to the server
-								out.println(userRole + " " + topic);
-								out.flush();
-
-								System.out.println("Registered with role '" + userRole + "' on topic '" + topic + "'.");
-
-								if (isPublisher()) {
-									System.out.println("You can start sending messages. Type 'quit' to exit.");
-								}
-							} else {
-								System.out.println("Usage: " + command + " <topic_name>");
-							}
-							break;
-						default:
-							System.out.println("Unknown command. Register using '[publish | topic] <topic>' or 'quit' to exit.");
-					}
-				} else {
-					// After registration
-					if (command.equals("quit")) {
+				switch (command) {
+					case "help":
+						System.out.println("--- AVAILABLE COMMANDS ---");
+						System.out.println("- [publish | subscribe] <topic>: Register as a publisher (read & write) / subscriber (read-only) for the specified topic");
+						System.out.println("- show: Show available topics");
+						System.out.println("- quit: Disconnect from the server");
+						break;
+					case "quit":
 						System.out.println("DISCONNECTING...");
 						running = false;
 						closeEverything();
 						break;
-					} else if (isPublisher()) {
-						// Publishers can send messages
-						out.println(inputLine);
-						out.flush();
-					} else {
-						// Subscribers can only send commands
-						System.out.println("Unknown command.");
-					}
+					case "publish":
+					case "subscribe":
+						if (userRole == null && topic == null) {
+							if (tokens.length >= 2) {
+								userRole = command;
+
+//								TODO: handle case where topic is not a single word
+								topic = tokens[1];
+
+								// Send userRole and topic to the server
+								out.println(userRole + " " + topic);
+
+								System.out.println("Successfully registered with role '" + userRole + "' on topic '" + topic + "'.");
+
+								// For publishers, prompt that they can start sending messages
+								if (isPublisher()) {
+									System.out.println("You can start sending messages. Type 'help' for a list of available commands or 'quit' to exit.");
+								}
+							} else {
+								System.out.println("Usage: " + command + " <topic_name>");
+							}
+						} else {
+							System.out.println("You have already registered as '" + userRole + "' for topic '" + topic + "'.");
+						}
+						break;
+					case "show":
+						if (ClientHandler.messages.isEmpty()) {
+							System.out.println("No topics available.");
+						} else {
+							System.out.println("--- TOPICS ---");
+							for (String topic : ClientHandler.messages.keySet()) {
+								System.out.println(topic);
+							}
+						}
+						break;
+					default:
+						if (userRole == null) {
+							System.out.println("Unknown command. Please register first using 'publish <topic>' or 'subscribe <topic>'.");
+						} else if (isPublisher()) {
+//							TODO: turn this into a case "send" above
+							// Publishers can send messages
+							out.println(inputLine);
+							out.flush();
+						} else {
+							// Subscribers can only send commands
+							System.out.println("Unknown command.");
+						}
+						break;
 				}
 			}
 		} catch (Exception e) {
@@ -94,13 +109,19 @@ public class Client {
 		}
 	}
 
+
 	public void receiveMessage() {
 		new Thread(() -> {
-			while (running && socket.isConnected()) {
+			while (running && !socket.isClosed()) {
 				try {
 					String messageFromServer = in.readLine();
 					if (messageFromServer != null) {
 						System.out.println(messageFromServer);
+					} else {
+						System.out.println("Server has closed the connection.");
+						running = false;
+						closeEverything();
+						break; // Exit the loop
 					}
 				} catch (IOException e) {
 					if (running) {
@@ -114,6 +135,7 @@ public class Client {
 		}).start();
 	}
 
+
 	private void closeEverything() {
 		running = false;
 		try {
@@ -121,6 +143,8 @@ public class Client {
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
+//			Necessary, do not remove
+			System.exit(0);
 		} catch (IOException e) {
 			System.out.println("Error closing resources: " + e.getMessage());
 		}

@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -20,13 +21,22 @@ public class Server {
 		try {
 			while (running && !serverSocket.isClosed()) {
 				try {
+					serverSocket.setSoTimeout(1000); // Set a timeout for accept() to periodically check if the server is still running
 					Socket socket = serverSocket.accept();
-					System.out.println("CLIENT CONNECTED.");
+					System.out.println("--- CLIENT CONNECTED ---");
 					ClientHandler clientHandler = new ClientHandler(socket, this);
 					pool.execute(clientHandler);
+				} catch (SocketTimeoutException e) {
+					// Continue to check if the server is still running
+					if (!running) {
+						break;
+					}
 				} catch (SocketException e) {
 					if (running) {
 						throw new RuntimeException(e);
+					} else {
+						// Server socket has been closed, exit the loop
+						break;
 					}
 				}
 			}
@@ -43,15 +53,21 @@ public class Server {
 			String command = scanner.nextLine();
 			switch (command) {
 				case "quit":
-					System.out.println("Connected clients: " + ClientHandler.clientHandlers.size());
+					System.out.println("(PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 					shutdownServer();
 					break;
 				case "show":
-					for (String key : ClientHandler.messages.keySet()) {
-						System.out.println(key);
+					if (ClientHandler.messages.isEmpty()) {
+						System.out.println("No topics available.");
+					} else {
+						System.out.println("--- TOPICS ---");
+						for (String topic : ClientHandler.messages.keySet()) {
+							System.out.println(topic);
+						}
 					}
 					break;
 				case "inspect":
+//					todo
 					System.out.println("Inspecting...");
 					break;
 				default:
@@ -77,13 +93,13 @@ public class Server {
 
 			pool.shutdownNow();
 
-			System.out.println("Connected clients: " + ClientHandler.clientHandlers.size());
-
+			System.out.println("(POST-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 
-		System.out.println("Server shut down.");
+		System.out.println("--- SERVER SHUT DOWN ---");
+		System.exit(0);
 	}
 
 	//  Synchronized so that only one thread can access the counter at a time
