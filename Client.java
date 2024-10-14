@@ -16,8 +16,8 @@ public class Client {
 	public Client(Socket socket, String[] userRoleAndTopic) {
 		try {
 			this.socket = socket;
-			userRole = userRoleAndTopic[0];
-			topic = userRoleAndTopic[1];
+//			userRole = userRoleAndTopic[0];
+//			topic = userRoleAndTopic[1];
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 		} catch (IOException e) {
@@ -79,6 +79,9 @@ public class Client {
 	public static boolean isPublisher() {
 		return userRole.equalsIgnoreCase("publish");
 	}
+	public static boolean isSubscriber() {
+		return userRole.equalsIgnoreCase("subscribe");
+	}
 
 	public static void main(String[] args) {
 		try {
@@ -88,8 +91,16 @@ public class Client {
 			do {
 				System.out.print("Enter 'publish' or 'subscribe' followed by a topic: ");
 				userRoleAndTopic = scanner.nextLine().split(" ");
-			} while (userRoleAndTopic.length != 2 ||
-					(!userRoleAndTopic[0].equalsIgnoreCase("publish") && !userRoleAndTopic[0].equalsIgnoreCase("subscribe")));
+				userRole = userRoleAndTopic[0];
+				StringBuilder topic = new StringBuilder();
+				for (int i = 1; i < userRoleAndTopic.length; i++) {
+					topic.append(userRoleAndTopic[i]).append(" ");
+				}
+				Client.topic = topic
+						.toString()
+						.replace(" ", "_")
+						.substring(0, topic.length() - 1);
+			} while (!isPublisher() && !isSubscriber());
 
 			Socket socket = new Socket(args[0], Integer.parseInt(args[1]));
 			Client client = new Client(socket, userRoleAndTopic);
