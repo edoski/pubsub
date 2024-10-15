@@ -5,8 +5,6 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.Scanner;
 
-// todo: add documentation above each method (same style as algo project)
-
 public class Client {
 	private Socket socket;
 	private BufferedReader in;
@@ -43,72 +41,22 @@ public class Client {
 
 				switch (command) {
 					case "help":
-						System.out.println("--- AVAILABLE COMMANDS ---");
-						if (userRole == null) {
-							System.out.println("- [publish | subscribe] <topic>: Register as a publisher (read & write) / subscriber (read-only) for the specified topic");
-						} else if (isPublisher()) {
-							System.out.println("- send <message>: Send a message to the server");
-						}
-						System.out.println("- show: Show available topics");
-						System.out.println("- quit: Disconnect from the server");
+						showHelp();
 						break;
 					case "send":
-						if (userRole == null) {
-							System.out.println("> You need to register as a publisher first.");
-						} else if (isPublisher()) {
-							if (tokens.length < 2) {
-								System.out.println("> Usage: send <message>");
-							} else {
-								StringBuilder message = new StringBuilder();
-								for (int i = 1; i < tokens.length; i++) {
-									message.append(tokens[i]).append(" ");
-								}
-								out.println(message);
-							}
-						} else {
-							System.out.println("> You are registered as a subscriber. You cannot send messages.");
-						}
+						handleSendCommand(tokens);
 						break;
 					case "show":
-						if (ClientHandler.messages.isEmpty()) {
-							System.out.println("> No topics available.");
-						} else {
-							System.out.println("--- TOPICS ---");
-							for (String topic : ClientHandler.messages.keySet()) {
-								System.out.println(topic);
-							}
-						}
+						out.println("show");
 						break;
 					case "quit":
 						System.out.println("> DISCONNECTING...");
-						// Send a special "QUIT" message to the server, signaling the client's intention to disconnect
-						out.println("QUIT");
+						out.println("quit");
 						closeEverything();
 						break;
 					case "publish":
 					case "subscribe":
-						if (userRole == null && topic == null) {
-							if (tokens.length >= 2) {
-								userRole = command;
-
-//								TODO: handle case where topic is not a single word
-								topic = tokens[1];
-
-								// Send userRole and topic to the server
-								out.println(userRole + " " + topic);
-
-								System.out.println("> Successfully registered with role '" + userRole + "' on topic '" + topic + "'.");
-
-								// For publishers, prompt that they can start sending messages
-								if (isPublisher()) {
-									System.out.println("> You can start sending messages. Type 'help' for a list of available commands or 'quit' to exit.\n");
-								}
-							} else {
-								System.out.println("> Usage: " + command + " <topic_name>");
-							}
-						} else {
-							System.out.println("> You have already registered as '" + userRole + "' for topic '" + topic + "'.");
-						}
+						handleRegistration(inputLine);
 						break;
 					default:
 						System.out.println("> Unknown command. Enter 'help' to see the list of available commands.");
@@ -122,6 +70,47 @@ public class Client {
 				closeEverything();
 			}
 		}
+	}
+
+	private void handleSendCommand(String[] tokens) {
+		if (userRole == null) {
+			System.out.println("> You need to register as a publisher first.");
+		} else if (isPublisher()) {
+			if (tokens.length < 2) {
+				System.out.println("> Usage: send <message>");
+			} else {
+				String message = String.join(" ", java.util.Arrays.copyOfRange(tokens, 1, tokens.length));
+				out.println(message);
+			}
+		} else {
+			System.out.println("> You are registered as a subscriber. You cannot send messages.");
+		}
+	}
+
+	private void handleRegistration(String inputLine) {
+		if (userRole == null && topic == null) {
+			// Send registration command to the server
+			out.println(inputLine);
+			// Update local variables after registration
+			String[] tokens = inputLine.trim().split("\\s+");
+			if (tokens.length >= 2) {
+				userRole = tokens[0].toLowerCase();
+				topic = String.join("_", java.util.Arrays.copyOfRange(tokens, 1, tokens.length));
+			}
+		} else {
+			System.out.println("> You have already registered as '" + userRole + "' for topic '" + topic + "'.");
+		}
+	}
+
+	private void showHelp() {
+		System.out.println("--- AVAILABLE COMMANDS ---");
+		if (userRole == null) {
+			System.out.println("- [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
+		} else if (isPublisher()) {
+			System.out.println("- send <message>: Send a message to the server");
+		}
+		System.out.println("- show: Show available topics");
+		System.out.println("- quit: Disconnect from the server");
 	}
 
 	public void receiveMessage() {
@@ -151,7 +140,6 @@ public class Client {
 		System.out.println("--- CLIENT SHUTDOWN ---");
 		running = false;
 		try {
-			// Important: Close the socket first to prevent the client from sending more messages
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();

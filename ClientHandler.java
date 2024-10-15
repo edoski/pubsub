@@ -14,17 +14,16 @@ public class ClientHandler implements Runnable {
 	private final Socket socket;
 	private BufferedReader in;
 	private PrintWriter out;
-	private String userRole;
-	private String topic;
-	private boolean running = true;
+	private String userRole = null; // Initialize as null
+	private String topic = null;    // Initialize as null
+	private volatile boolean running = true;
 	private static final int SOCKET_TIMEOUT = 500; // 500 ms
 
-
 	public ClientHandler(Socket socket, Server server) {
-        this.server = server;
-        this.socket = socket;
-        clientHandlers.add(this); // Important: Add to the list of handlers immediately so both registered and unregistered clients are handled
-    }
+		this.server = server;
+		this.socket = socket;
+		clientHandlers.add(this); // Important: Add to the list of handlers immediately
+	}
 
 	@Override
 	public void run() {
@@ -32,32 +31,9 @@ public class ClientHandler implements Runnable {
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 
-			System.out.println("> Waiting for client to send role and topic...");
+			System.out.println("> Client connected.");
 
-			// Set a timeout for the initial read
-			this.socket.setSoTimeout(60000); // 60 seconds
-
-			String line = in.readLine();
-			if (line == null || line.equals("QUIT")) {
-				System.out.println("> Client disconnected before sending role and topic.");
-				closeEverything(socket, in, out);
-				return;
-			}
-
-			// todo: maybe i'm just tired but check if this check is necessary
-			String[] userRoleAndTopic = line.split(" ");
-			if (userRoleAndTopic.length < 2) {
-				System.out.println("> Invalid role and topic received from client.");
-				closeEverything(socket, in, out);
-				return;
-			}
-
-			this.userRole = userRoleAndTopic[0];
-			this.topic = userRoleAndTopic[1];
-
-			System.out.println("> Client registered with role '" + userRole + "' on topic '" + topic + "'.");
-
-			// Set socket timeout for regular operations
+			// Set socket timeout for operations
 			this.socket.setSoTimeout(SOCKET_TIMEOUT);
 
 			// Main loop for handling client messages
@@ -66,16 +42,7 @@ public class ClientHandler implements Runnable {
 				try {
 					messageFromClient = in.readLine();  // Blocking call
 					if (messageFromClient != null) {
-						if (messageFromClient.equals("QUIT")) {
-							System.out.println("> Client requested to disconnect.");
-							interruptThread();
-							break;
-						}
-						// Process message
-						Message message = new Message(server.getNextMessageId(), topic, messageFromClient);
-						broadcastMessage(message.toString());
-						messages.putIfAbsent(topic, new CopyOnWriteArrayList<>());
-						messages.get(topic).add(message);
+						handleClientMessage(messageFromClient.trim());
 					} else {
 						break; // Client disconnected
 					}
@@ -90,12 +57,88 @@ public class ClientHandler implements Runnable {
 			}
 		} catch (IOException e) {
 			System.out.println("> IOException in ClientHandler: " + e.getMessage());
+		} finally {
+			closeEverything(socket, in, out);
 		}
+	}
+
+	private void handleClientMessage(String message) {
+		if (userRole == null || topic == null) {
+			// Client is not registered yet
+			String[] tokens = message.split("\\s+");
+			String command = tokens[0].toLowerCase();
+
+			switch (command) {
+				case "quit":
+					System.out.println("> Client requested to disconnect.");
+					interruptThread();
+					break;
+				case "show":
+					sendTopicList();
+					break;
+				case "publish":
+				case "subscribe":
+					handleRegistration(tokens);
+					break;
+				default:
+					out.println("> Unknown command. Please register first using 'publish <topic>' or 'subscribe <topic>'.");
+					break;
+			}
+		} else {
+			// Client is registered
+			if (message.equalsIgnoreCase("quit")) {
+				System.out.println("> Client requested to disconnect.");
+				interruptThread();
+			} else if (message.equalsIgnoreCase("show")) {
+				sendTopicList();
+			} else if (userRole.equals("publish")) {
+				// Publisher can send messages
+				Message newMessage = new Message(server.getNextMessageId(), topic, message);
+				broadcastMessage(newMessage.toString());
+				messages.putIfAbsent(topic, new CopyOnWriteArrayList<>());
+				messages.get(topic).add(newMessage);
+			} else {
+				// Subscriber or unknown role
+				out.println("> Unknown command. As a subscriber, you cannot send messages.");
+			}
+		}
+	}
+
+	private void handleRegistration(String[] tokens) {
+		if (tokens.length >= 2) {
+			userRole = tokens[0].toLowerCase();
+			// Combine tokens to form the topic name in case it contains spaces
+			topic = String.join("_", java.util.Arrays.copyOfRange(tokens, 1, tokens.length));
+
+			System.out.println("> Client registered with role '" + userRole + "' on topic '" + topic + "'.");
+			out.println("> Successfully registered with role '" + userRole + "' on topic '" + topic + "'.");
+
+			if (userRole.equals("publish")) {
+				out.println("> You can start sending messages. Type 'help' for a list of available commands or 'quit' to exit.");
+			}
+		} else {
+			out.println("> Usage: " + tokens[0] + " <topic_name>");
+		}
+	}
+
+	private void sendTopicList() {
+		// Build the list of topics
+		StringBuilder topicsList = new StringBuilder();
+		if (messages.isEmpty()) {
+			topicsList.append("> No topics available.");
+		} else {
+			topicsList.append("--- TOPICS ---");
+			for (String topic : messages.keySet()) {
+				topicsList.append("\n").append(topic);
+			}
+		}
+		// Send the topics list to the client
+		out.println(topicsList);
 	}
 
 	public void broadcastMessage(String message) {
 		for (ClientHandler clientHandler : clientHandlers) {
-			if (clientHandler.topic.equals(this.topic)) {
+			if (clientHandler.topic != null && clientHandler.topic.equals(this.topic)) {
 				clientHandler.out.println(message);
 			}
 		}
@@ -110,7 +153,6 @@ public class ClientHandler implements Runnable {
 		clientHandlers.remove(this);
 		System.out.println("> Client handler removed. Current handlers: " + clientHandlers.size());
 		try {
-//			Important: Close the socket first to prevent the client from sending more messages
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
