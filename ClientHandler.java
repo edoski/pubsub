@@ -4,18 +4,19 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class ClientHandler implements Runnable {
 	public static CopyOnWriteArrayList<ClientHandler> clientHandlers = new CopyOnWriteArrayList<>();
-	public static ConcurrentHashMap<String, CopyOnWriteArrayList<Message>> messages = new ConcurrentHashMap<>();
+	public static ConcurrentHashMap<String, CopyOnWriteArrayList<Message>> topics = new ConcurrentHashMap<>();
 	private final Server server;
 	private final Socket socket;
 	private BufferedReader in;
 	private PrintWriter out;
-	private String userRole = null; // Initialize as null
-	private String topic = null;    // Initialize as null
+	private String userRole = null;
+	private String topic = null;
 	private volatile boolean running = true;
 	private static final int SOCKET_TIMEOUT = 500; // 500 ms
 
@@ -31,7 +32,7 @@ public class ClientHandler implements Runnable {
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 
-			System.out.println("> Client connected.");
+//			System.out.println("> Client connected.");
 
 			// Set socket timeout for operations
 			this.socket.setSoTimeout(SOCKET_TIMEOUT);
@@ -57,50 +58,39 @@ public class ClientHandler implements Runnable {
 			}
 		} catch (IOException e) {
 			System.out.println("> IOException in ClientHandler: " + e.getMessage());
-		} finally {
-			closeEverything(socket, in, out);
 		}
 	}
 
 	private void handleClientMessage(String message) {
-		if (userRole == null || topic == null) {
-			// Client is not registered yet
-			String[] tokens = message.split("\\s+");
-			String command = tokens[0].toLowerCase();
+		String[] tokens = message.split("\\s+");
+		String command = tokens[0].toLowerCase();
 
-			switch (command) {
-				case "quit":
-					System.out.println("> Client requested to disconnect.");
-					interruptThread();
-					break;
-				case "show":
-					sendTopicList();
-					break;
-				case "publish":
-				case "subscribe":
-					handleRegistration(tokens);
-					break;
-				default:
-					out.println("> Unknown command. Please register first using 'publish <topic>' or 'subscribe <topic>'.");
-					break;
-			}
-		} else {
-			// Client is registered
-			if (message.equalsIgnoreCase("quit")) {
+		switch (command) {
+			case "quit":
 				System.out.println("> Client requested to disconnect.");
 				interruptThread();
-			} else if (message.equalsIgnoreCase("show")) {
+				break;
+			case "show":
 				sendTopicList();
-			} else if (userRole.equals("publish")) {
-				// Publisher can send messages
-				Message newMessage = new Message(server.getNextMessageId(), topic, message);
-				broadcastMessage(newMessage.toString());
-				messages.putIfAbsent(topic, new CopyOnWriteArrayList<>());
-				messages.get(topic).add(newMessage);
-			} else {
-				// Subscriber or unknown role
-				out.println("> Unknown command. As a subscriber, you cannot send messages.");
-			}
+				break;
+			case "publish":
+			case "subscribe":
+				if (userRole == null || topic == null) {
+					handleRegistration(tokens);
+				} else {
+					out.println("> Unknown command. Please register first using 'publish <topic>' or 'subscribe <topic>'.");
+				}
+				break;
+			default:
+				if (userRole.equals("publish")) {
+					Message newMessage = new Message(topic, message);
+					broadcastMessage(newMessage.toString());
+					topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
+					topics.get(topic).add(newMessage);
+				} else {
+					out.println("> Unknown command. Enter 'help' for a list of available commands.");
+				}
+				break;
 		}
 	}
 
@@ -108,27 +98,27 @@ public class ClientHandler implements Runnable {
 		if (tokens.length >= 2) {
 			userRole = tokens[0].toLowerCase();
 			// Combine tokens to form the topic name in case it contains spaces
-			topic = String.join("_", java.util.Arrays.copyOfRange(tokens, 1, tokens.length));
+			topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length));
 
 			System.out.println("> Client registered with role '" + userRole + "' on topic '" + topic + "'.");
-			out.println("> Successfully registered with role '" + userRole + "' on topic '" + topic + "'.");
-
-			if (userRole.equals("publish")) {
-				out.println("> You can start sending messages. Type 'help' for a list of available commands or 'quit' to exit.");
-			}
+			out.println(
+					"> Registered with role '" + userRole + "' on topic '" + topic + "'.\n" +
+					"> Type 'help' for a list of available commands."
+			);
 		} else {
 			out.println("> Usage: " + tokens[0] + " <topic_name>");
 		}
 	}
 
+	// todo: make it so that even if the topic has no messages, it still shows up in the list
 	private void sendTopicList() {
 		// Build the list of topics
 		StringBuilder topicsList = new StringBuilder();
-		if (messages.isEmpty()) {
+		if (topics.isEmpty()) {
 			topicsList.append("> No topics available.");
 		} else {
 			topicsList.append("--- TOPICS ---");
-			for (String topic : messages.keySet()) {
+			for (String topic : topics.keySet()) {
 				topicsList.append("\n").append(topic);
 			}
 		}

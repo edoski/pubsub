@@ -3,7 +3,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.Scanner;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class Client {
 	private Socket socket;
@@ -11,6 +13,7 @@ public class Client {
 	private PrintWriter out;
 	private String userRole = null;
 	private String topic = null;
+	public static CopyOnWriteArrayList<Message> messages = new CopyOnWriteArrayList<>();
 	private volatile boolean running = true;
 
 	public Client(Socket socket) {
@@ -50,7 +53,6 @@ public class Client {
 						out.println("show");
 						break;
 					case "quit":
-						System.out.println("> DISCONNECTING...");
 						out.println("quit");
 						closeEverything();
 						break;
@@ -79,7 +81,8 @@ public class Client {
 			if (tokens.length < 2) {
 				System.out.println("> Usage: send <message>");
 			} else {
-				String message = String.join(" ", java.util.Arrays.copyOfRange(tokens, 1, tokens.length));
+				String message = String.join(" ", Arrays.copyOfRange(tokens, 1, tokens.length));
+				messages.add(new Message(topic, message));
 				out.println(message);
 			}
 		} else {
@@ -95,7 +98,7 @@ public class Client {
 			String[] tokens = inputLine.trim().split("\\s+");
 			if (tokens.length >= 2) {
 				userRole = tokens[0].toLowerCase();
-				topic = String.join("_", java.util.Arrays.copyOfRange(tokens, 1, tokens.length));
+				topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length));
 			}
 		} else {
 			System.out.println("> You have already registered as '" + userRole + "' for topic '" + topic + "'.");
@@ -137,12 +140,13 @@ public class Client {
 	}
 
 	private void closeEverything() {
-		System.out.println("--- CLIENT SHUTDOWN ---");
 		running = false;
 		try {
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
+			System.out.println("--- CLIENT SHUTDOWN ---");
+			System.exit(0);
 		} catch (IOException e) {
 			System.out.println("> Error closing resources: " + e.getMessage());
 		}

@@ -8,8 +8,8 @@ public class Message {
 	private final Date timestamp = new Date();
 	private static final SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy - HH:mm:ss");
 
-	public Message(int uuid, String topic, String message) {
-		this.uuid = uuid;
+	public Message(String topic, String message) {
+		this.uuid = Server.getNextMessageId(); // Message class in charge of fetching the next ID
 		this.topic = topic;
 		this.message = message.replaceAll("(.{80})", "$1\n"); // Wrap lines at 80 characters
 		timestamp.setTime(timestamp.getTime());

@@ -19,6 +19,7 @@ public class Server {
 
 	public void startServer() {
 		try {
+			System.out.println("--- SERVER STARTED ---");
 			while (running && !serverSocket.isClosed()) {
 				try {
 					serverSocket.setSoTimeout(1000); // Set a timeout for accept() to periodically check if the server is still running
@@ -57,11 +58,11 @@ public class Server {
 					shutdownServer();
 					break;
 				case "show":
-					if (ClientHandler.messages.isEmpty()) {
+					if (ClientHandler.topics.isEmpty()) {
 						System.out.println("> No topics available.");
 					} else {
 						System.out.println("--- TOPICS ---");
-						for (String topic : ClientHandler.messages.keySet()) {
+						for (String topic : ClientHandler.topics.keySet()) {
 							System.out.println(topic);
 						}
 					}
@@ -103,7 +104,7 @@ public class Server {
 	}
 
 	//  Synchronized so that only one thread can access the counter at a time
-	public synchronized int getNextMessageId() {
+	public static synchronized int getNextMessageId() {
 		return counter++;
 	}
 
