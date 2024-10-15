@@ -11,7 +11,7 @@ public class Client {
 	private Socket socket;
 	private BufferedReader in;
 	private PrintWriter out;
-	private String userRole = null;
+	private Boolean isPublisher = null;
 	private String topic = null;
 	public static CopyOnWriteArrayList<Message> messages = new CopyOnWriteArrayList<>();
 	private volatile boolean running = true;
@@ -75,9 +75,9 @@ public class Client {
 	}
 
 	private void handleSendCommand(String[] tokens) {
-		if (userRole == null) {
+		if (isPublisher == null) {
 			System.out.println("> You need to register as a publisher first.");
-		} else if (isPublisher()) {
+		} else if (isPublisher) {
 			if (tokens.length < 2) {
 				System.out.println("> Usage: send <message>");
 			} else {
@@ -91,25 +91,27 @@ public class Client {
 	}
 
 	private void handleRegistration(String inputLine) {
-		if (userRole == null && topic == null) {
+		if (isPublisher == null && topic == null) {
 			// Send registration command to the server
 			out.println(inputLine);
 			// Update local variables after registration
 			String[] tokens = inputLine.trim().split("\\s+");
 			if (tokens.length >= 2) {
-				userRole = tokens[0].toLowerCase();
+				String role = tokens[0].toLowerCase();
+				isPublisher = role.equals("publish");
+				// Combine tokens to form the topic name in case it contains spaces
 				topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length));
 			}
 		} else {
-			System.out.println("> You have already registered as '" + userRole + "' for topic '" + topic + "'.");
+			System.out.println("> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.");
 		}
 	}
 
 	private void showHelp() {
 		System.out.println("--- AVAILABLE COMMANDS ---");
-		if (userRole == null) {
+		if (isPublisher == null) {
 			System.out.println("- [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
-		} else if (isPublisher()) {
+		} else if (isPublisher) {
 			System.out.println("- send <message>: Send a message to the server");
 		}
 		System.out.println("- show: Show available topics");
@@ -150,10 +152,6 @@ public class Client {
 		} catch (IOException e) {
 			System.out.println("> Error closing resources: " + e.getMessage());
 		}
-	}
-
-	public boolean isPublisher() {
-		return userRole != null && userRole.equalsIgnoreCase("publish");
 	}
 
 	public static void main(String[] args) {

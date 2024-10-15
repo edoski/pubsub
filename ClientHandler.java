@@ -15,7 +15,7 @@ public class ClientHandler implements Runnable {
 	private final Socket socket;
 	private BufferedReader in;
 	private PrintWriter out;
-	private String userRole = null;
+	private Boolean isPublisher = null; // Changed from String userRole to Boolean isPublisher
 	private String topic = null;
 	private volatile boolean running = true;
 	private static final int SOCKET_TIMEOUT = 500; // 500 ms
@@ -31,8 +31,6 @@ public class ClientHandler implements Runnable {
 		try {
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
-
-//			System.out.println("> Client connected.");
 
 			// Set socket timeout for operations
 			this.socket.setSoTimeout(SOCKET_TIMEOUT);
@@ -75,20 +73,24 @@ public class ClientHandler implements Runnable {
 				break;
 			case "publish":
 			case "subscribe":
-				if (userRole == null || topic == null) {
+				if (isPublisher == null || topic == null) {
 					handleRegistration(tokens);
 				} else {
-					out.println("> Unknown command. Please register first using 'publish <topic>' or 'subscribe <topic>'.");
+					out.println("> You have already registered.");
 				}
 				break;
 			default:
-				if (userRole.equals("publish")) {
+				if (isPublisher == null) {
+					out.println("> Please register first using 'publish <topic>' or 'subscribe <topic>'.");
+				} else if (isPublisher) {
+					// Publisher can send messages
 					Message newMessage = new Message(topic, message);
 					broadcastMessage(newMessage.toString());
 					topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
 					topics.get(topic).add(newMessage);
 				} else {
-					out.println("> Unknown command. Enter 'help' for a list of available commands.");
+					// Subscriber cannot send messages
+					out.println("> As a subscriber, you cannot send messages. Enter 'help' for a list of available commands.");
 				}
 				break;
 		}
@@ -96,21 +98,32 @@ public class ClientHandler implements Runnable {
 
 	private void handleRegistration(String[] tokens) {
 		if (tokens.length >= 2) {
-			userRole = tokens[0].toLowerCase();
+			String role = tokens[0].toLowerCase();
 			// Combine tokens to form the topic name in case it contains spaces
 			topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length));
 
-			System.out.println("> Client registered with role '" + userRole + "' on topic '" + topic + "'.");
+			if (role.equals("publish")) {
+				isPublisher = true;
+			} else if (role.equals("subscribe")) {
+				isPublisher = false;
+			} else {
+				out.println("> Invalid role. Use 'publish' or 'subscribe'.");
+				return;
+			}
+
+			System.out.println("> Client registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
 			out.println(
-					"> Registered with role '" + userRole + "' on topic '" + topic + "'.\n" +
-					"> Type 'help' for a list of available commands."
+					"> Registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.\n" +
+							"> Type 'help' for a list of available commands."
 			);
+
+			// Ensure the topic is added to the topics map
+			topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
 		} else {
 			out.println("> Usage: " + tokens[0] + " <topic_name>");
 		}
 	}
 
-	// todo: make it so that even if the topic has no messages, it still shows up in the list
 	private void sendTopicList() {
 		// Build the list of topics
 		StringBuilder topicsList = new StringBuilder();
