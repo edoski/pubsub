@@ -19,7 +19,7 @@ public class Message {
 	public String toString() {
 		return    "--------------------------------------------------------------------------------\n"
 				+ dateFormat.format(timestamp) + "\n"
-				+ "[ID " + uuid + "] "  + topic + "\n"
+				+ "[ID " + uuid + " | TOPIC '"  + topic + "']\n"
 				+ "BODY: " + message + "\n"
 				+ "--------------------------------------------------------------------------------\n";
 	}

@@ -67,6 +67,9 @@ public class Server {
 						}
 					}
 					break;
+				case "help":
+					showHelp();
+					break;
 				case "inspect":
 //					todo
 					System.out.println("Inspecting...");
@@ -75,6 +78,12 @@ public class Server {
 					System.out.println("> Unknown command.");
 			}
 		}
+	}
+
+	private void showHelp() {
+		System.out.println("--- AVAILABLE COMMANDS ---");
+		System.out.println("- show: Show available topics");
+		System.out.println("- quit: Disconnect from the server");
 	}
 
 	public boolean isRunning() {

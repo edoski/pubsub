@@ -27,7 +27,10 @@ public class Client {
 	}
 
 	private void start() {
-		System.out.println("> Connected to the server. Type 'help' for a list of available commands.");
+		System.out.println(
+				"--- CONNECTED TO SERVER ON PORT " + socket.getPort() + " ---\n" +
+				"> Enter 'help' for a list of available commands.\n"
+		);
 		// Start the receiveMessage thread
 		receiveMessage();
 
@@ -52,6 +55,12 @@ public class Client {
 					case "show":
 						out.println("show");
 						break;
+					case "listall":
+						out.println("listall");
+						break;
+					case "list":
+						out.println("list");
+						break;
 					case "quit":
 						out.println("quit");
 						closeEverything();
@@ -59,6 +68,8 @@ public class Client {
 					case "publish":
 					case "subscribe":
 						handleRegistration(inputLine);
+						break;
+					case "":
 						break;
 					default:
 						System.out.println("> Unknown command. Enter 'help' to see the list of available commands.");
@@ -112,10 +123,17 @@ public class Client {
 		if (isPublisher == null) {
 			System.out.println("- [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
 		} else if (isPublisher) {
+			// Only publishers can use these command
 			System.out.println("- send <message>: Send a message to the server");
+//			todo
+			System.out.println("- list: List all messages you have sent in the topic");
+		} else {
+			// Only registered clients (both publishers & subscribers) can use this command
+			System.out.println("- listall: List all messages in the topic");
 		}
+		// All clients (registered & unregistered) can use these commands
 		System.out.println("- show: Show available topics");
-		System.out.println("- quit: Disconnect from the server");
+		System.out.println("- quit: Disconnect from the server\n");
 	}
 
 	public void receiveMessage() {

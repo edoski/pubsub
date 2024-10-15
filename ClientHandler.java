@@ -15,7 +15,7 @@ public class ClientHandler implements Runnable {
 	private final Socket socket;
 	private BufferedReader in;
 	private PrintWriter out;
-	private Boolean isPublisher = null; // Changed from String userRole to Boolean isPublisher
+	private Boolean isPublisher = null;
 	private String topic = null;
 	private volatile boolean running = true;
 	private static final int SOCKET_TIMEOUT = 500; // 500 ms
@@ -64,24 +64,25 @@ public class ClientHandler implements Runnable {
 		String command = tokens[0].toLowerCase();
 
 		switch (command) {
+			case "show":
+				sendTopicList();
+				break;
+			case "listall":
+				listAllTopicMessages();
+				break;
+			case "list":
+				// todo
 			case "quit":
 				System.out.println("> Client requested to disconnect.");
 				interruptThread();
 				break;
-			case "show":
-				sendTopicList();
-				break;
 			case "publish":
 			case "subscribe":
-				if (isPublisher == null || topic == null) {
-					handleRegistration(tokens);
-				} else {
-					out.println("> You have already registered.");
-				}
+				handleRegistration(tokens);
 				break;
 			default:
 				if (isPublisher == null) {
-					out.println("> Please register first using 'publish <topic>' or 'subscribe <topic>'.");
+					out.println("> Please register first using '[publish | subscribe] <topic>'.");
 				} else if (isPublisher) {
 					// Publisher can send messages
 					Message newMessage = new Message(topic, message);
@@ -89,10 +90,31 @@ public class ClientHandler implements Runnable {
 					topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
 					topics.get(topic).add(newMessage);
 				} else {
-					// Subscriber cannot send messages
-					out.println("> As a subscriber, you cannot send messages. Enter 'help' for a list of available commands.");
+					out.println("> As a subscriber, you cannot send messages.");
 				}
 				break;
+		}
+	}
+
+	private void listAllTopicMessages() {
+		if (isPublisher == null) {
+			out.println("> You need to subscribe/publish to a topic first.");
+			return;
+		}
+
+		if (topic != null) {
+			CopyOnWriteArrayList<Message> messages = topics.get(topic);
+
+			if (messages == null || messages.isEmpty()) {
+				out.println("> No messages available for topic '" + topic + "'.");
+				return;
+			}
+
+			out.println("--- " + messages.size() + " MESSAGES IN TOPIC '" + topic + "' ---\n");
+			for (Message m : messages) {
+				out.println(m);
+			}
+			out.println("--- END OF MESSAGES IN TOPIC '" + topic + "' ---");
 		}
 	}
 
@@ -130,10 +152,11 @@ public class ClientHandler implements Runnable {
 		if (topics.isEmpty()) {
 			topicsList.append("> No topics available.");
 		} else {
-			topicsList.append("--- TOPICS ---");
+			topicsList.append("--- START OF TOPICS ---");
 			for (String topic : topics.keySet()) {
-				topicsList.append("\n").append(topic);
+				topicsList.append("\n- ").append(topic);
 			}
+			topicsList.append("\n--- END OF TOPICS ---\n");
 		}
 		// Send the topics list to the client
 		out.println(topicsList);
