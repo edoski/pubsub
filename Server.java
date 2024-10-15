@@ -24,7 +24,7 @@ public class Server {
 				try {
 					serverSocket.setSoTimeout(1000); // Set a timeout for accept() to periodically check if the server is still running
 					Socket socket = serverSocket.accept();
-					System.out.println("--- CLIENT CONNECTED ---");
+					System.out.println("--- NEW CLIENT CONNECTED ---");
 					ClientHandler clientHandler = new ClientHandler(socket, this);
 					pool.execute(clientHandler);
 				} catch (SocketTimeoutException e) {
@@ -54,18 +54,10 @@ public class Server {
 			String command = scanner.nextLine();
 			switch (command) {
 				case "quit":
-					System.out.println("> (PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 					shutdownServer();
 					break;
 				case "show":
-					if (ClientHandler.topics.isEmpty()) {
-						System.out.println("> No topics available.");
-					} else {
-						System.out.println("--- TOPICS ---");
-						for (String topic : ClientHandler.topics.keySet()) {
-							System.out.println(topic);
-						}
-					}
+					showTopics();
 					break;
 				case "help":
 					showHelp();
@@ -74,25 +66,38 @@ public class Server {
 //					todo
 					System.out.println("Inspecting...");
 					break;
+				case "":
+					break;
 				default:
-					System.out.println("> Unknown command.");
+					System.out.println("> Unknown command.\n");
+			}
+		}
+	}
+
+	private static void showTopics() {
+		if (ClientHandler.topics.isEmpty()) {
+			System.out.println("> No topics available.\n");
+		} else {
+			System.out.println("--- EXISTING TOPICS ---");
+			for (String topic : ClientHandler.topics.keySet()) {
+				System.out.println(topic);
 			}
 		}
 	}
 
 	private void showHelp() {
 		System.out.println("--- AVAILABLE COMMANDS ---");
-		System.out.println("- show: Show available topics");
+		System.out.println("> show: Show available topics");
 		// todo
 		System.out.println(
 				"""
-						- inspect <topic>: Open interactive mode to inspect a topic
-						\t- listall: List all messages in the topic
-						\t- delete <messageId>: Delete a message by ID
-						\t- end: Exit interactive mode
+						> inspect <topic>: Open interactive mode to inspect a topic
+						\t> listall: List all messages in the topic
+						\t> delete <messageId>: Delete a message by ID
+						\t> end: Exit interactive mode
 						\t! N.B. Commands "quit" & "inspect" are disabled in interactive mode, all client operations are suspended until the mode is exited."""
 		);
-		System.out.println("- quit: Disconnect from the server\n");
+		System.out.println("> quit: Disconnect from the server\n");
 	}
 
 	public boolean isRunning() {
@@ -102,7 +107,9 @@ public class Server {
 	private void shutdownServer() {
 		running = false;
 		try {
+			System.out.println("> (PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 			for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
+				clientHandler.sendShutdownMessage();
 				clientHandler.interruptThread();
 			}
 
@@ -111,7 +118,6 @@ public class Server {
 			}
 
 			pool.shutdownNow();
-
 			System.out.println("> (POST-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 		} catch (IOException e) {
 			throw new RuntimeException(e);
@@ -129,6 +135,7 @@ public class Server {
 	public static void main(String[] args) {
 		try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(args[0]))) {
 			Server server = new Server(serverSocket);
+
 			Thread serverThread = new Thread(server::startServer);
 			serverThread.start();
 

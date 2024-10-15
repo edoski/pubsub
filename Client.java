@@ -11,8 +11,8 @@ public class Client {
 	private Socket socket;
 	private BufferedReader in;
 	private PrintWriter out;
-	private Boolean isPublisher = null;
-	private String topic = null;
+	private static Boolean isPublisher = null;
+	private static String topic = null;
 	public static CopyOnWriteArrayList<Message> messages = new CopyOnWriteArrayList<>();
 	private volatile boolean running = true;
 
@@ -45,6 +45,8 @@ public class Client {
 				String[] tokens = inputLine.trim().split("\\s+");
 				String command = tokens[0].toLowerCase();
 
+				// Commands that use out.println() send a request to the client handler to fulfill the command
+				// The rest of the commands are handled locally
 				switch (command) {
 					case "help":
 						showHelp();
@@ -59,7 +61,7 @@ public class Client {
 						out.println("listall");
 						break;
 					case "list":
-						out.println("list");
+						listPublisherMessages();
 						break;
 					case "quit":
 						out.println("quit");
@@ -72,7 +74,7 @@ public class Client {
 					case "":
 						break;
 					default:
-						System.out.println("> Unknown command. Enter 'help' to see the list of available commands.");
+						System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
 						break;
 				}
 			}
@@ -85,19 +87,34 @@ public class Client {
 		}
 	}
 
+	private static void listPublisherMessages() {
+		if (isPublisher == null || !isPublisher) {
+			System.out.println(
+					"> As a" + (isPublisher == null ? "n unregistered client" : " subscriber") + ", you cannot list your own messages."
+			);
+			return;
+		}
+
+		System.out.println("--- YOU SENT " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
+		for (Message message : messages) {
+			System.out.println(message);
+		}
+		System.out.println("--- END OF MESSAGES YOU SENT ---\n");
+	}
+
 	private void handleSendCommand(String[] tokens) {
 		if (isPublisher == null) {
-			System.out.println("> You need to register as a publisher first.");
+			System.out.println("> You need to register as a publisher first.\n");
 		} else if (isPublisher) {
 			if (tokens.length < 2) {
-				System.out.println("> Usage: send <message>");
+				System.out.println("> Usage: send <message>\n");
 			} else {
 				String message = String.join(" ", Arrays.copyOfRange(tokens, 1, tokens.length));
 				messages.add(new Message(topic, message));
 				out.println(message);
 			}
 		} else {
-			System.out.println("> You are registered as a subscriber. You cannot send messages.");
+			System.out.println("> You are registered as a subscriber. You cannot send messages.\n");
 		}
 	}
 
@@ -105,7 +122,6 @@ public class Client {
 		if (isPublisher == null && topic == null) {
 			// Send registration command to the server
 			out.println(inputLine);
-			// Update local variables after registration
 			String[] tokens = inputLine.trim().split("\\s+");
 			if (tokens.length >= 2) {
 				String role = tokens[0].toLowerCase();
@@ -114,26 +130,25 @@ public class Client {
 				topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length));
 			}
 		} else {
-			System.out.println("> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.");
+			System.out.println("> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n");
 		}
 	}
 
 	private void showHelp() {
 		System.out.println("--- AVAILABLE COMMANDS ---");
 		if (isPublisher == null) {
-			System.out.println("- [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
+			System.out.println("> [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
 		} else if (isPublisher) {
 			// Only publishers can use these command
-			System.out.println("- send <message>: Send a message to the server");
-//			todo
-			System.out.println("- list: List all messages you have sent in the topic");
+			System.out.println("> send <message>: Send a message to the server");
+			System.out.println("> list: List all messages you have sent in the topic");
 		} else {
 			// Only registered clients (both publishers & subscribers) can use this command
-			System.out.println("- listall: List all messages in the topic");
+			System.out.println("> listall: List all messages in the topic");
 		}
 		// All clients (registered & unregistered) can use these commands
-		System.out.println("- show: Show available topics");
-		System.out.println("- quit: Disconnect from the server\n");
+		System.out.println("> show: Show available topics");
+		System.out.println("> quit: Disconnect from the server\n");
 	}
 
 	public void receiveMessage() {
@@ -174,7 +189,7 @@ public class Client {
 
 	public static void main(String[] args) {
 		if (args.length < 2) {
-			System.out.println("> Usage: java Client <hostname> <port>");
+			System.err.println("> Usage: java Client <hostname> <port>");
 			return;
 		}
 

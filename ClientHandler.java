@@ -63,6 +63,8 @@ public class ClientHandler implements Runnable {
 		String[] tokens = message.split("\\s+");
 		String command = tokens[0].toLowerCase();
 
+		// Non-default commands are specific functions that the client requests from the server
+		// Default command is the client sending a message
 		switch (command) {
 			case "show":
 				sendTopicList();
@@ -70,8 +72,6 @@ public class ClientHandler implements Runnable {
 			case "listall":
 				listAllTopicMessages();
 				break;
-			case "list":
-				// todo
 			case "quit":
 				System.out.println("> Client requested to disconnect.");
 				interruptThread();
@@ -81,24 +81,14 @@ public class ClientHandler implements Runnable {
 				handleRegistration(tokens);
 				break;
 			default:
-				if (isPublisher == null) {
-					out.println("> Please register first using '[publish | subscribe] <topic>'.");
-				} else if (isPublisher) {
-					// Publisher can send messages
-					Message newMessage = new Message(topic, message);
-					broadcastMessage(newMessage.toString());
-					topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
-					topics.get(topic).add(newMessage);
-				} else {
-					out.println("> As a subscriber, you cannot send messages.");
-				}
+				broadcastMessage(new Message(topic, message));
 				break;
 		}
 	}
 
 	private void listAllTopicMessages() {
 		if (isPublisher == null) {
-			out.println("> You need to subscribe/publish to a topic first.");
+			out.println("> You need to subscribe/publish to a topic first.\n");
 			return;
 		}
 
@@ -106,15 +96,15 @@ public class ClientHandler implements Runnable {
 			CopyOnWriteArrayList<Message> messages = topics.get(topic);
 
 			if (messages == null || messages.isEmpty()) {
-				out.println("> No messages available for topic '" + topic + "'.");
+				out.println("> No messages available for topic '" + topic + "'.\n");
 				return;
 			}
 
-			out.println("--- " + messages.size() + " MESSAGES IN TOPIC '" + topic + "' ---\n");
+			out.println("--- " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
 			for (Message m : messages) {
 				out.println(m);
 			}
-			out.println("--- END OF MESSAGES IN TOPIC '" + topic + "' ---");
+			out.println("--- END OF MESSAGES IN '" + topic + "' ---\n");
 		}
 	}
 
@@ -128,21 +118,18 @@ public class ClientHandler implements Runnable {
 				isPublisher = true;
 			} else if (role.equals("subscribe")) {
 				isPublisher = false;
-			} else {
-				out.println("> Invalid role. Use 'publish' or 'subscribe'.");
-				return;
 			}
 
 			System.out.println("> Client registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
 			out.println(
 					"> Registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.\n" +
-							"> Type 'help' for a list of available commands."
+					"> Enter 'help' for a list of available commands.\n"
 			);
 
 			// Ensure the topic is added to the topics map
 			topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
 		} else {
-			out.println("> Usage: " + tokens[0] + " <topic_name>");
+			out.println("> Usage: " + tokens[0] + " <topic_name>\n");
 		}
 	}
 
@@ -150,23 +137,31 @@ public class ClientHandler implements Runnable {
 		// Build the list of topics
 		StringBuilder topicsList = new StringBuilder();
 		if (topics.isEmpty()) {
-			topicsList.append("> No topics available.");
+			topicsList.append("> No topics available.\n");
 		} else {
-			topicsList.append("--- START OF TOPICS ---");
+			topicsList.append("--- EXISTING TOPICS ---\n");
 			for (String topic : topics.keySet()) {
-				topicsList.append("\n- ").append(topic);
+				topicsList.append("> ").append(topic).append("\n");
 			}
-			topicsList.append("\n--- END OF TOPICS ---\n");
 		}
 		// Send the topics list to the client
 		out.println(topicsList);
 	}
 
-	public void broadcastMessage(String message) {
+	public void broadcastMessage(Message message) {
+		topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
+		topics.get(topic).add(message);
+
 		for (ClientHandler clientHandler : clientHandlers) {
-			if (clientHandler.topic != null && clientHandler.topic.equals(this.topic)) {
-				clientHandler.out.println(message);
+			if (clientHandler.topic.equals(this.topic)) {
+				clientHandler.out.println(message.toString());
 			}
+		}
+	}
+
+	public void sendShutdownMessage() {
+		if (out != null) {
+			out.println("> Server initiated shutdown...");
 		}
 	}
 
