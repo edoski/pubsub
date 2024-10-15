@@ -83,7 +83,16 @@ public class Server {
 	private void showHelp() {
 		System.out.println("--- AVAILABLE COMMANDS ---");
 		System.out.println("- show: Show available topics");
-		System.out.println("- quit: Disconnect from the server");
+		// todo
+		System.out.println(
+				"""
+						- inspect <topic>: Open interactive mode to inspect a topic
+						\t- listall: List all messages in the topic
+						\t- delete <messageId>: Delete a message by ID
+						\t- end: Exit interactive mode
+						\t! N.B. Commands "quit" & "inspect" are disabled in interactive mode, all client operations are suspended until the mode is exited."""
+		);
+		System.out.println("- quit: Disconnect from the server\n");
 	}
 
 	public boolean isRunning() {
