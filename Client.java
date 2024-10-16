@@ -3,9 +3,13 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+// todo (critical): evaluate if backlog should be executed on ClientHandler due to concurrency issues
+// todo (optional): give clients ability to change roles (publisher to subscriber and vice versa) after registration
 
 public class Client {
 	private Socket socket;
@@ -15,6 +19,11 @@ public class Client {
 	private static String topic = null;
 	public static CopyOnWriteArrayList<Message> messages = new CopyOnWriteArrayList<>();
 	private volatile boolean running = true;
+	private boolean isServerInspecting = false;
+	private static final ArrayList<String> backlog = new ArrayList<>();
+
+	private static final ArrayList<String> publisherOnlyCommands = new ArrayList<>(Arrays.asList("send", "list"));
+	private static final ArrayList<String> disabledWhenInspecting = new ArrayList<>(Arrays.asList("send", "list", "listall"));
 
 	public Client(Socket socket) {
 		try {
@@ -27,141 +36,38 @@ public class Client {
 	}
 
 	private void start() {
-		System.out.println(
-				"--- CONNECTED TO SERVER ON PORT " + socket.getPort() + " ---\n" +
-				"> Enter 'help' for a list of available commands.\n"
-		);
-		// Start the receiveMessage thread
-		receiveMessage();
+        System.out.println(
+                "--- CONNECTED TO SERVER ON PORT " + socket.getPort() + " ---\n" +
+                "> Enter 'help' for a list of available commands.\n"
+        );
+        // Start the receiveMessage thread
+        receiveMessage();
 
-		// Use the main thread for input handling
-		try (Scanner scanner = new Scanner(System.in)) {
-			while (running) {
-				if (!running) {
-					break;
-				}
+        // Use the main thread for input handling
+        try (Scanner scanner = new Scanner(System.in)) {
+            while (running) {
+                if (!running) break;
+				processCommand(scanner.nextLine());
+            }
+        } catch (Exception e) {
+            if (running) {
+                System.out.println("> Error reading from console: " + e.getMessage());
+                running = false;
+                closeEverything();
+            }
+        }
+    }
 
-				String inputLine = scanner.nextLine();
-				String[] tokens = inputLine.trim().split("\\s+");
-				String command = tokens[0].toLowerCase();
-
-				// Commands that use out.println() send a request to the client handler to fulfill the command
-				// The rest of the commands are handled locally
-				switch (command) {
-					case "help":
-						showHelp();
-						break;
-					case "send":
-						handleSendCommand(tokens);
-						break;
-					case "show":
-						out.println("show");
-						break;
-					case "listall":
-						out.println("listall");
-						break;
-					case "list":
-						listPublisherMessages();
-						break;
-					case "quit":
-						out.println("quit");
-						closeEverything();
-						break;
-					case "publish":
-					case "subscribe":
-						handleRegistration(inputLine);
-						break;
-					case "":
-						break;
-					default:
-						System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
-						break;
-				}
-			}
-		} catch (Exception e) {
-			if (running) {
-				System.out.println("> Error reading from console: " + e.getMessage());
-				running = false;
-				closeEverything();
-			}
-		}
-	}
-
-	private static void listPublisherMessages() {
-		if (isPublisher == null || !isPublisher) {
-			System.out.println(
-					"> As a" + (isPublisher == null ? "n unregistered client" : " subscriber") + ", you cannot list your own messages."
-			);
-			return;
-		}
-
-		System.out.println("--- YOU SENT " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
-		for (Message message : messages) {
-			System.out.println(message);
-		}
-		System.out.println("--- END OF MESSAGES YOU SENT ---\n");
-	}
-
-	private void handleSendCommand(String[] tokens) {
-		if (isPublisher == null) {
-			System.out.println("> You need to register as a publisher first.\n");
-		} else if (isPublisher) {
-			if (tokens.length < 2) {
-				System.out.println("> Usage: send <message>\n");
-			} else {
-				String message = String.join(" ", Arrays.copyOfRange(tokens, 1, tokens.length));
-				messages.add(new Message(topic, message));
-				out.println(message);
-			}
-		} else {
-			System.out.println("> You are registered as a subscriber. You cannot send messages.\n");
-		}
-	}
-
-	private void handleRegistration(String inputLine) {
-		if (isPublisher == null && topic == null) {
-			// Send registration command to the server
-			out.println(inputLine);
-			String[] tokens = inputLine.trim().split("\\s+");
-			if (tokens.length >= 2) {
-				String role = tokens[0].toLowerCase();
-				isPublisher = role.equals("publish");
-				// Combine tokens to form the topic name in case it contains spaces
-				topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length));
-			}
-		} else {
-			System.out.println("> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n");
-		}
-	}
-
-	private void showHelp() {
-		System.out.println("--- AVAILABLE COMMANDS ---");
-		if (isPublisher == null) {
-			System.out.println("> [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
-		} else if (isPublisher) {
-			// Only publishers can use these command
-			System.out.println("> send <message>: Send a message to the server");
-			System.out.println("> list: List all messages you have sent in the topic");
-		} else {
-			// Only registered clients (both publishers & subscribers) can use this command
-			System.out.println("> listall: List all messages in the topic");
-		}
-		// All clients (registered & unregistered) can use these commands
-		System.out.println("> show: Show available topics");
-		System.out.println("> quit: Disconnect from the server\n");
-	}
-
-	public void receiveMessage() {
+	private void receiveMessage() {
 		new Thread(() -> {
 			while (running && !socket.isClosed()) {
 				try {
 					String messageFromServer = in.readLine();
-					if (messageFromServer != null) {
-						System.out.println(messageFromServer);
-					} else {
+					if (messageFromServer == null) {
 						closeEverything();
 						break; // Server disconnected
 					}
+					handleMessageFromServer(messageFromServer);
 				} catch (IOException e) {
 					if (running) {
 						System.out.println("> Connection lost: " + e.getMessage());
@@ -174,12 +80,175 @@ public class Client {
 		}).start();
 	}
 
+	// Heart of the client, processes the input commands
+	// todo refactor this and ClientHandler inputs so that you send sanitized tokens[] directly instead of inputLine
+	private void processCommand(String inputLine) {
+		// Sanitize input, split by whitespace
+		String[] tokens = inputLine.trim().split("\\s+");
+		String command = tokens[0].toLowerCase();
+
+		// If the server is inspecting, queue the command for later execution
+		if (isServerInspecting && disabledWhenInspecting.contains(command)) {
+			if (!isPublisher && publisherOnlyCommands.contains(command)) {
+				System.out.println("> You cannot use the command '" + command + "' as a subscriber.\n");
+				return;
+			}
+			System.out.println("> Command '" + inputLine + "' will be executed when Inspect mode is ended.\n");
+			synchronized (backlog) {
+				backlog.add(inputLine);
+			}
+			return;
+		}
+
+		// Commands that use out.println() send a request to the client handler to fulfill the command
+		// The rest of the commands are handled entirely or partially locally
+		switch (command) {
+			case "":
+				break;
+			case "help":
+				showHelp();
+				break;
+			case "show":
+				out.println("show");
+				break;
+			case "send":
+				handleSendCommand(tokens);
+				break;
+			case "list":
+				listPublisherMessages();
+				break;
+			case "listall":
+				out.println("listall");
+				break;
+			case "quit":
+				out.println("quit");
+				closeEverything();
+				break;
+			case "publish":
+			case "subscribe":
+				handleRegistration(tokens);
+				break;
+			default:
+				System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
+				break;
+		}
+	}
+
+	private void showHelp() {
+		System.out.println("--- AVAILABLE COMMANDS ---");
+		if (isPublisher == null) {
+			System.out.println("> [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
+		}
+		if (isPublisher != null && !isServerInspecting) {
+			if (isPublisher) {
+				// Only publishers can use these command
+				System.out.println("> list: List the messages you have sent in the topic");
+				System.out.println("> send <message>: Send a message to the server");
+			}
+			// Only registered clients (both publishers & subscribers) can use this command
+			System.out.println("> listall: List all messages in the topic");
+		}
+		// All clients (registered & unregistered) can use these commands
+		System.out.println("> show: Show available topics");
+		System.out.println("> quit: Disconnect from the server\n");
+	}
+
+	private void handleSendCommand(String[] tokens) {
+		if (isPublisher == null || !isPublisher) {
+			String errorMessage = isPublisher == null
+					? "> You need to register as a publisher first.\n"
+					: "> You are registered as a subscriber. You cannot send messages.\n";
+			System.out.println(errorMessage);
+			return;
+		}
+
+		if (tokens.length < 2) {
+			System.out.println("> Usage: send <message>\n");
+			return;
+		}
+
+		// Combine tokens to form the message in case of multiple words
+		String message = String.join(" ", Arrays.copyOfRange(tokens, 1, tokens.length));
+		messages.add(new Message(topic, message));
+		out.println(message);
+	}
+
+	private static void listPublisherMessages() {
+		if (isPublisher == null || !isPublisher) {
+			String errorMessage = isPublisher == null
+					? "> You need to register as a publisher first.\n"
+					: "> You are registered as a subscriber. You cannot list your own messages.\n";
+			System.out.println(errorMessage);
+			return;
+		}
+
+		if (messages.isEmpty()) {
+			System.out.println("> You have not sent any messages in '" + topic + "'.\n");
+			return;
+		}
+
+		System.out.println("--- YOU SENT " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
+		for (Message message : messages) {
+			System.out.println(message);
+		}
+		System.out.println("--- END OF MESSAGES YOU SENT ---\n");
+	}
+
+	private void handleRegistration(String[] tokens) {
+		if (isPublisher != null) {
+			System.out.println(
+					"> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n"
+			);
+			return;
+		}
+
+		if (tokens.length < 2) {
+			System.out.println("> Usage: " + tokens[0] + " <topic_name>\n");
+			return;
+		}
+
+		// todo: can we refactor this to use tokens[] instead of inputLine?
+		// Send registration command to the server
+		out.println(String.join(" ", tokens));
+
+		String role = tokens[0].toLowerCase();
+		isPublisher = role.equals("publish");
+		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
+	}
+
+	private void handleMessageFromServer(String messageFromServer) {
+		String[] tokens = messageFromServer.split("\\s+");
+		if (tokens[0].equals("IS_SERVER_INSPECTING")) {
+			isServerInspecting = Boolean.parseBoolean(tokens[1]);
+			if (!isServerInspecting) executeBacklogCommands();
+			return;
+		}
+
+		// If the server is NOT inspecting, it's meant for the client
+		System.out.println(messageFromServer);
+	}
+
+	private void executeBacklogCommands() {
+		if (backlog.isEmpty()) return;
+		System.out.println("--- BACKLOG EXECUTION START ---");
+		synchronized (backlog) {
+			for (String cmd : backlog) {
+				processCommand(cmd);
+			}
+			backlog.clear();
+		}
+		System.out.println("--- BACKLOG EXECUTION END ---\n");
+	}
+
 	private void closeEverything() {
 		running = false;
 		try {
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
+			synchronized (backlog) {
+				backlog.clear();
+			}
 			System.out.println("--- CLIENT SHUTDOWN ---");
 			System.exit(0);
 		} catch (IOException e) {

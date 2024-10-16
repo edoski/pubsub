@@ -18,12 +18,11 @@ public class ClientHandler implements Runnable {
 	private Boolean isPublisher = null;
 	private String topic = null;
 	private volatile boolean running = true;
-	private static final int SOCKET_TIMEOUT = 500; // 500 ms
 
 	public ClientHandler(Socket socket, Server server) {
 		this.server = server;
 		this.socket = socket;
-		clientHandlers.add(this); // Important: Add to the list of handlers immediately
+		clientHandlers.add(this); // Important: Add immediately so both registered and unregistered are handled
 	}
 
 	@Override
@@ -33,23 +32,19 @@ public class ClientHandler implements Runnable {
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 
 			// Set socket timeout for operations
-			this.socket.setSoTimeout(SOCKET_TIMEOUT);
+			this.socket.setSoTimeout(500); // 500 ms
 
 			// Main loop for handling client messages
 			String messageFromClient;
 			while (running && !socket.isClosed()) {
 				try {
 					messageFromClient = in.readLine();  // Blocking call
-					if (messageFromClient != null) {
-						handleClientMessage(messageFromClient.trim());
-					} else {
-						break; // Client disconnected
-					}
+					if (messageFromClient == null) break; // Client disconnected
+					processCommand(messageFromClient);
 				} catch (SocketTimeoutException e) {
 					if (!server.isRunning()) {
 						break;
 					}
-					// Continue loop if still running
 				} catch (IOException e) {
 					break;
 				}
@@ -59,8 +54,8 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
-	private void handleClientMessage(String message) {
-		String[] tokens = message.split("\\s+");
+	private void processCommand(String message) {
+		String[] tokens = message.trim().split("\\s+");
 		String command = tokens[0].toLowerCase();
 
 		// Non-default commands are specific functions that the client requests from the server
@@ -73,7 +68,8 @@ public class ClientHandler implements Runnable {
 				listAllTopicMessages();
 				break;
 			case "quit":
-				System.out.println("> Client requested to disconnect.");
+				String role = isPublisher == null ? "Unregistered user" : isPublisher ? "Publisher" : "Subscriber";
+				System.out.println("> Client requested to disconnect: " + role + (topic == null ? "" : " in '" + topic + "'") + ".");
 				interruptThread();
 				break;
 			case "publish":
@@ -86,66 +82,51 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+	private void sendTopicList() {
+		StringBuilder topicsList = new StringBuilder();
+		topicsList.append("--- EXISTING TOPICS ---\n");
+		for (String topic : topics.keySet()) {
+			topicsList.append("> ").append(topic).append("\n");
+		}
+		// Send the topics list to the client
+		out.println(topics.isEmpty() ? "> No topics available.\n" : topicsList);
+	}
+
 	private void listAllTopicMessages() {
 		if (isPublisher == null) {
 			out.println("> You need to subscribe/publish to a topic first.\n");
 			return;
 		}
 
-		if (topic != null) {
-			CopyOnWriteArrayList<Message> messages = topics.get(topic);
-
-			if (messages == null || messages.isEmpty()) {
-				out.println("> No messages available for topic '" + topic + "'.\n");
-				return;
-			}
-
-			out.println("--- " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
-			for (Message m : messages) {
-				out.println(m);
-			}
-			out.println("--- END OF MESSAGES IN '" + topic + "' ---\n");
+		CopyOnWriteArrayList<Message> messages = topics.get(topic);
+		if (messages == null || messages.isEmpty()) {
+			out.println("> No messages available for topic '" + topic + "'.\n");
+			return;
 		}
+
+		out.println("--- " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
+		for (Message m : messages) out.println(m);
+		out.println("--- END OF MESSAGES IN '" + topic + "' ---\n");
 	}
 
 	private void handleRegistration(String[] tokens) {
-		if (tokens.length >= 2) {
-			String role = tokens[0].toLowerCase();
-			// Combine tokens to form the topic name in case it contains spaces
-			topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length));
+		String role = tokens[0].toLowerCase();
+		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
+		isPublisher = role.equals("publish");
 
-			if (role.equals("publish")) {
-				isPublisher = true;
-			} else if (role.equals("subscribe")) {
-				isPublisher = false;
-			}
+		System.out.println("> Client registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
+		out.println(
+				"> Registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.\n" +
+				"> Enter 'help' for a list of available commands.\n"
+		);
 
-			System.out.println("> Client registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
-			out.println(
-					"> Registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.\n" +
-					"> Enter 'help' for a list of available commands.\n"
-			);
+		// Ensure the topic is added to the topics map
+		topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
 
-			// Ensure the topic is added to the topics map
-			topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
-		} else {
-			out.println("> Usage: " + tokens[0] + " <topic_name>\n");
+		// Check if the server is inspecting this topic and notify the client
+		if (server.isInspectingTopic(topic)) {
+			setIsServerInspecting(true);
 		}
-	}
-
-	private void sendTopicList() {
-		// Build the list of topics
-		StringBuilder topicsList = new StringBuilder();
-		if (topics.isEmpty()) {
-			topicsList.append("> No topics available.\n");
-		} else {
-			topicsList.append("--- EXISTING TOPICS ---\n");
-			for (String topic : topics.keySet()) {
-				topicsList.append("> ").append(topic).append("\n");
-			}
-		}
-		// Send the topics list to the client
-		out.println(topicsList);
 	}
 
 	public void broadcastMessage(Message message) {
@@ -154,8 +135,27 @@ public class ClientHandler implements Runnable {
 
 		for (ClientHandler clientHandler : clientHandlers) {
 			if (clientHandler.topic.equals(this.topic)) {
-				clientHandler.out.println(message.toString());
+				clientHandler.out.println((clientHandler != this ? "> MESSAGE RECEIVED:\n" : "> MESSAGE SENT:\n") + message.toString());
 			}
+		}
+	}
+
+	public void setIsServerInspecting(boolean isInspecting) {
+		try {
+			if (isInspecting) {
+				String commands = isPublisher ? "send, list, listall" : "listall";
+				out.println("--- SERVER INSPECT STARTED FOR '" + topic + "' ---\n" +
+						"> Regular functionality has been temporarily suspended. See 'help' for a list of available commands.\n" +
+						"> You can still use '" + commands + "', but they will be executed when the server ends Inspect mode.\n");
+			} else {
+				out.println("--- SERVER INSPECT ENDED ---\n" +
+						"> Server has exited Inspect mode for topic '" + topic + "'.\n" +
+						"> Any backlogged commands will now be executed.\n"
+				);
+			}
+			out.println("IS_SERVER_INSPECTING " + isInspecting);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 
@@ -180,5 +180,9 @@ public class ClientHandler implements Runnable {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	public String getTopic() {
+		return topic;
 	}
 }

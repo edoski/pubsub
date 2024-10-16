@@ -15,6 +15,10 @@ public class Message {
 		timestamp.setTime(timestamp.getTime());
 	}
 
+	public int getId() {
+		return uuid;
+	}
+
 	@Override
 	public String toString() {
 		return    "--------------------------------------------------------------------------------\n"
