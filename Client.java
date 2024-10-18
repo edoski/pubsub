@@ -6,7 +6,6 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Client {
 	private Socket socket;
@@ -14,14 +13,9 @@ public class Client {
 	private PrintWriter out;
 	private static Boolean isPublisher = null;
 	private static String topic = null;
-	public static ConcurrentLinkedQueue<Message> messages = new ConcurrentLinkedQueue<>();
 	private volatile boolean running = true;
 	public static boolean isServerInspecting = false;
 	private static final ArrayList<String> backlog = new ArrayList<>();
-
-	private volatile boolean isBacklogExecution = false;
-	private final ArrayList<String> bufferedMessages = new ArrayList<>();
-
 	private static final ArrayList<String> publisherOnlyCommands = new ArrayList<>(Arrays.asList("send", "list"));
 	private static final ArrayList<String> disabledWhenInspecting = new ArrayList<>(Arrays.asList("send", "list", "listall"));
 
@@ -40,12 +34,10 @@ public class Client {
                 "--- CONNECTED TO SERVER ON PORT " + socket.getPort() + " ---\n" +
                 "> Enter 'help' for a list of available commands.\n"
         );
-        // Start the receiveMessage thread
-        receiveMessage();
+        receiveMessage(); // Start the receiveMessage thread
 
-        // Use the main thread for input handling
         try (Scanner scanner = new Scanner(System.in)) {
-            while (running) {
+            while (running) { // Use the main thread for input handling
                 if (!running) break;
 				processCommand(scanner.nextLine());
             }
@@ -88,6 +80,7 @@ public class Client {
 		String command = tokens[0].toLowerCase();
 
 		// If the server is inspecting, queue the command for later execution
+		// todo refactor this in a cleaner way
 		if (isServerInspecting && disabledWhenInspecting.contains(command)) {
 			if (!isPublisher && publisherOnlyCommands.contains(command)) {
 				System.out.println("> You cannot use the command '" + command + "' as a subscriber.\n");
@@ -95,6 +88,22 @@ public class Client {
 			}
 			System.out.println("> Command '" + inputLine + "' will be executed when Inspect mode is ended.\n");
 			synchronized (backlog) {
+
+
+
+
+
+
+
+				// todo test if synchronized is needed
+
+
+
+
+
+
+
+
 				backlog.add(inputLine);
 			}
 			return;
@@ -115,7 +124,7 @@ public class Client {
 				handleSendCommand(tokens);
 				break;
 			case "list":
-				listPublisherMessages();
+				out.println("list");
 				break;
 			case "listall":
 				out.println("listall");
@@ -140,10 +149,9 @@ public class Client {
 			System.out.println("> [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
 		}
 		if (isPublisher != null && !isServerInspecting) {
-			if (isPublisher) {
-				// Only publishers can use these command
-				System.out.println("> list: List the messages you have sent in the topic");
+			if (isPublisher) { // Only publishers can use these commands
 				System.out.println("> send <message>: Send a message to the server");
+				System.out.println("> list: List the messages you have sent in the topic");
 			}
 			// Only registered clients (both publishers & subscribers) can use this command
 			System.out.println("> listall: List all messages in the topic");
@@ -169,29 +177,7 @@ public class Client {
 
 		// Combine tokens to form the message in case of multiple words
 		String message = String.join(" ", Arrays.copyOfRange(tokens, 1, tokens.length));
-		messages.add(new Message(topic, message));
 		out.println(message);
-	}
-
-	private static void listPublisherMessages() {
-		if (isPublisher == null || !isPublisher) {
-			String errorMessage = isPublisher == null
-					? "> You need to register as a publisher first.\n"
-					: "> You are registered as a subscriber. You cannot list your own messages.\n";
-			System.out.println(errorMessage);
-			return;
-		}
-
-		if (messages.isEmpty()) {
-			System.out.println("> You have not sent any messages in '" + topic + "'.\n");
-			return;
-		}
-
-		System.out.println("--- YOU SENT " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
-		for (Message message : messages) {
-			System.out.println(message);
-		}
-		System.out.println("--- END OF MESSAGES YOU SENT ---\n");
 	}
 
 	private void handleRegistration(String[] tokens) {
@@ -223,38 +209,26 @@ public class Client {
 			return;
 		}
 
-		if (isServerInspecting) {
-			synchronized (bufferedMessages) { // If in backlog execution, buffer messages
-				bufferedMessages.add(messageFromServer);
-			}
-			return;
-		}
-
-		// If the server is NOT inspecting or executing backlog, it's meant for the client to display
 		System.out.println(messageFromServer);
 	}
 
 	private void executeBacklogCommands() {
 		if (backlog.isEmpty()) return;
 		synchronized (backlog) {
-			System.out.println("--- COMMANDS TO EXECUTE ---");
-			for (String cmd : backlog) System.out.println("- " + cmd);
-			System.out.println();
+			for (String cmd : backlog) {
 
-			isBacklogExecution = true; // Backlog execution started
-			for (String cmd : backlog) processCommand(cmd);
-			backlog.clear();
-			isBacklogExecution = false; // Backlog execution completed
 
-			// This is happening concurrently with receiveMessage() thread, likely root of the issue
-			System.out.println("!!! REACHED PROCESS COMMAND END");
 
-			// After backlog execution, display buffered messages
-			if (!bufferedMessages.isEmpty()) {
-				System.out.println("!!! REACHED BUFFERED MESSAGES DISPLAY");
-				for (String msg : bufferedMessages) System.out.println(msg);
-				bufferedMessages.clear();
+
+//	todo			out.println("process " + cmd);     like add in ClientHandler a "process" case that prefixes the command to the backlog execution
+
+
+
+
+
+				processCommand(cmd);
 			}
+			backlog.clear();
 		}
 	}
 

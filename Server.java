@@ -10,7 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
-//  ***** fix backlog issue with send command being executed after backlog executions (send is asynchronous? while e.g. list is synchronous)
+//  FIXED? ***** fix backlog issue with send command being executed after backlog executions (send is asynchronous while list is synchronous, so list is executed first even if send is called first)
 //            bufferedMessages print is happening concurrently with receiveMessage() thread, likely root of the issue
 //  *** refactor Client and ClientHandler's processCommand() methods to take in a sanitized String[] tokens instead of a String inputLine
 //         ? Can do out.println(tokens.toString()) and then on receiving end can do String[] tokens = message.split(", ");
@@ -30,7 +30,6 @@ public class Server {
 	private final ServerSocket serverSocket;
 	private final ExecutorService pool = Executors.newCachedThreadPool();
 	private static boolean running = true;
-	public static int messageCounter = 0; // Used to generate unique message IDs
 	private static boolean isInspecting = false;
 	private String currentInspectTopic = null;
 
@@ -255,11 +254,6 @@ public class Server {
 
 		System.out.println("--- SERVER SHUTDOWN ---");
 		System.exit(0);
-	}
-
-	//  Synchronized so that only one thread can access the counter at a time
-	public static synchronized int getNextMessageId() {
-		return messageCounter++;
 	}
 
 	public synchronized boolean isInspectingTopic(String topic) {

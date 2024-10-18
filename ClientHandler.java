@@ -1,9 +1,11 @@
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -18,6 +20,7 @@ public class ClientHandler implements Runnable {
 	private Boolean isPublisher = null;
 	private String topic = null;
 	private volatile boolean running = true;
+	private final ArrayList<Message> clientMessages = new ArrayList<>(); // Messages sent by this client
 
 	public ClientHandler(Socket socket, Server server) {
 		this.server = server;
@@ -64,6 +67,9 @@ public class ClientHandler implements Runnable {
 			case "listall":
 				listAllTopicMessages();
 				break;
+			case "list":
+				listPublisherMessages();
+				break;
 			case "quit":
 				interruptThread();
 				break;
@@ -72,9 +78,27 @@ public class ClientHandler implements Runnable {
 				handleRegistration(tokens);
 				break;
 			default:
-				broadcastMessage(new Message(topic, message));
+				broadcastMessage(message);
 				break;
 		}
+	}
+
+	private void listPublisherMessages() {
+		if (isPublisher == null || !isPublisher) {
+			out.println("> You need to register as a publisher first.\n");
+			return;
+		}
+
+		if (clientMessages.isEmpty()) {
+			out.println("> You have not sent any messages in '" + topic + "'.\n");
+			return;
+		}
+
+		out.println("--- YOU SENT " + clientMessages.size() + " MESSAGES IN '" + topic + "' ---\n");
+		for (Message message : clientMessages) {
+			out.println(message.toString());
+		}
+		out.println("--- END OF MESSAGES YOU SENT ---\n");
 	}
 
 	private void sendTopicList() {
@@ -124,11 +148,13 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
-	public void broadcastMessage(Message message) {
+	public void broadcastMessage(String messageBody) {
+		Message message = new Message(topic, messageBody);
 		topics.get(topic).offer(message);
+		clientMessages.add(message); // Important: Store the message in the client's own list
 		for (ClientHandler clientHandler : clientHandlers) {
 			if (clientHandler.topic != null && clientHandler.topic.equals(this.topic)) {
-				clientHandler.out.println((clientHandler != this ? "> MESSAGE RECEIVED:\n" : "> MESSAGE SENT:\n") + message.toString());
+				clientHandler.out.println((clientHandler != this ? "> MESSAGE RECEIVED:\n" : "> MESSAGE SENT:\n") + message);
 			}
 		}
 	}
