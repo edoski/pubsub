@@ -6,10 +6,7 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner;
-import java.util.concurrent.CopyOnWriteArrayList;
-
-// todo (critical): evaluate if backlog should be executed on ClientHandler due to concurrency issues
-// todo (optional): give clients ability to change roles (publisher to subscriber and vice versa) after registration
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class Client {
 	private Socket socket;
@@ -17,10 +14,13 @@ public class Client {
 	private PrintWriter out;
 	private static Boolean isPublisher = null;
 	private static String topic = null;
-	public static CopyOnWriteArrayList<Message> messages = new CopyOnWriteArrayList<>();
+	public static ConcurrentLinkedQueue<Message> messages = new ConcurrentLinkedQueue<>();
 	private volatile boolean running = true;
-	private boolean isServerInspecting = false;
+	public static boolean isServerInspecting = false;
 	private static final ArrayList<String> backlog = new ArrayList<>();
+
+	private volatile boolean isBacklogExecution = false;
+	private final ArrayList<String> bufferedMessages = new ArrayList<>();
 
 	private static final ArrayList<String> publisherOnlyCommands = new ArrayList<>(Arrays.asList("send", "list"));
 	private static final ArrayList<String> disabledWhenInspecting = new ArrayList<>(Arrays.asList("send", "list", "listall"));
@@ -207,7 +207,6 @@ public class Client {
 			return;
 		}
 
-		// todo: can we refactor this to use tokens[] instead of inputLine?
 		// Send registration command to the server
 		out.println(String.join(" ", tokens));
 
@@ -224,20 +223,39 @@ public class Client {
 			return;
 		}
 
-		// If the server is NOT inspecting, it's meant for the client
+		if (isServerInspecting) {
+			synchronized (bufferedMessages) { // If in backlog execution, buffer messages
+				bufferedMessages.add(messageFromServer);
+			}
+			return;
+		}
+
+		// If the server is NOT inspecting or executing backlog, it's meant for the client to display
 		System.out.println(messageFromServer);
 	}
 
 	private void executeBacklogCommands() {
 		if (backlog.isEmpty()) return;
-		System.out.println("--- BACKLOG EXECUTION START ---");
 		synchronized (backlog) {
-			for (String cmd : backlog) {
-				processCommand(cmd);
-			}
+			System.out.println("--- COMMANDS TO EXECUTE ---");
+			for (String cmd : backlog) System.out.println("- " + cmd);
+			System.out.println();
+
+			isBacklogExecution = true; // Backlog execution started
+			for (String cmd : backlog) processCommand(cmd);
 			backlog.clear();
+			isBacklogExecution = false; // Backlog execution completed
+
+			// This is happening concurrently with receiveMessage() thread, likely root of the issue
+			System.out.println("!!! REACHED PROCESS COMMAND END");
+
+			// After backlog execution, display buffered messages
+			if (!bufferedMessages.isEmpty()) {
+				System.out.println("!!! REACHED BUFFERED MESSAGES DISPLAY");
+				for (String msg : bufferedMessages) System.out.println(msg);
+				bufferedMessages.clear();
+			}
 		}
-		System.out.println("--- BACKLOG EXECUTION END ---\n");
 	}
 
 	private void closeEverything() {
@@ -246,9 +264,6 @@ public class Client {
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
-			synchronized (backlog) {
-				backlog.clear();
-			}
 			System.out.println("--- CLIENT SHUTDOWN ---");
 			System.exit(0);
 		} catch (IOException e) {

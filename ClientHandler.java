@@ -6,11 +6,11 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class ClientHandler implements Runnable {
-	public static CopyOnWriteArrayList<ClientHandler> clientHandlers = new CopyOnWriteArrayList<>();
-	public static ConcurrentHashMap<String, CopyOnWriteArrayList<Message>> topics = new ConcurrentHashMap<>();
+	public static ConcurrentLinkedQueue<ClientHandler> clientHandlers = new ConcurrentLinkedQueue<>();
+	public static ConcurrentHashMap<String, ConcurrentLinkedQueue<Message>> topics = new ConcurrentHashMap<>();
 	private final Server server;
 	private final Socket socket;
 	private BufferedReader in;
@@ -31,8 +31,7 @@ public class ClientHandler implements Runnable {
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 
-			// Set socket timeout for operations
-			this.socket.setSoTimeout(500); // 500 ms
+			this.socket.setSoTimeout(500); // 500ms timeout for operations
 
 			// Main loop for handling client messages
 			String messageFromClient;
@@ -42,15 +41,13 @@ public class ClientHandler implements Runnable {
 					if (messageFromClient == null) break; // Client disconnected
 					processCommand(messageFromClient);
 				} catch (SocketTimeoutException e) {
-					if (!server.isRunning()) {
-						break;
-					}
+					if (!server.isRunning()) break;
 				} catch (IOException e) {
 					break;
 				}
 			}
 		} catch (IOException e) {
-			System.out.println("> IOException in ClientHandler: " + e.getMessage());
+			System.out.println("> IOException in ClientHandler run(): " + e.getMessage());
 		}
 	}
 
@@ -68,8 +65,6 @@ public class ClientHandler implements Runnable {
 				listAllTopicMessages();
 				break;
 			case "quit":
-				String role = isPublisher == null ? "Unregistered user" : isPublisher ? "Publisher" : "Subscriber";
-				System.out.println("> Client requested to disconnect: " + role + (topic == null ? "" : " in '" + topic + "'") + ".");
 				interruptThread();
 				break;
 			case "publish":
@@ -98,14 +93,14 @@ public class ClientHandler implements Runnable {
 			return;
 		}
 
-		CopyOnWriteArrayList<Message> messages = topics.get(topic);
+		ConcurrentLinkedQueue<Message> messages = topics.get(topic);
 		if (messages == null || messages.isEmpty()) {
 			out.println("> No messages available for topic '" + topic + "'.\n");
 			return;
 		}
 
 		out.println("--- " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
-		for (Message m : messages) out.println(m);
+		for (Message msg : messages) out.println(msg);
 		out.println("--- END OF MESSAGES IN '" + topic + "' ---\n");
 	}
 
@@ -121,7 +116,7 @@ public class ClientHandler implements Runnable {
 		);
 
 		// Ensure the topic is added to the topics map
-		topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
+		topics.putIfAbsent(topic, new ConcurrentLinkedQueue<>());
 
 		// Check if the server is inspecting this topic and notify the client
 		if (server.isInspectingTopic(topic)) {
@@ -130,11 +125,9 @@ public class ClientHandler implements Runnable {
 	}
 
 	public void broadcastMessage(Message message) {
-		topics.putIfAbsent(topic, new CopyOnWriteArrayList<>());
-		topics.get(topic).add(message);
-
+		topics.get(topic).offer(message);
 		for (ClientHandler clientHandler : clientHandlers) {
-			if (clientHandler.topic.equals(this.topic)) {
+			if (clientHandler.topic != null && clientHandler.topic.equals(this.topic)) {
 				clientHandler.out.println((clientHandler != this ? "> MESSAGE RECEIVED:\n" : "> MESSAGE SENT:\n") + message.toString());
 			}
 		}
@@ -145,12 +138,12 @@ public class ClientHandler implements Runnable {
 			if (isInspecting) {
 				String commands = isPublisher ? "send, list, listall" : "listall";
 				out.println("--- SERVER INSPECT STARTED FOR '" + topic + "' ---\n" +
-						"> Regular functionality has been temporarily suspended. See 'help' for a list of available commands.\n" +
-						"> You can still use '" + commands + "', but they will be executed when the server ends Inspect mode.\n");
+							"> Regular functionality has been temporarily suspended. See 'help' for a list of available commands.\n" +
+							"> You can still use '" + commands + "', but they will be executed when the server ends Inspect mode.\n");
 			} else {
 				out.println("--- SERVER INSPECT ENDED ---\n" +
-						"> Server has exited Inspect mode for topic '" + topic + "'.\n" +
-						"> Any backlogged commands will now be executed.\n"
+							"> Server has exited Inspect mode for topic '" + topic + "'.\n" +
+							"> Any backlogged commands will now be executed.\n"
 				);
 			}
 			out.println("IS_SERVER_INSPECTING " + isInspecting);
@@ -159,14 +152,14 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
-	public void sendShutdownMessage() {
-		if (out != null) {
-			out.println("> Server initiated shutdown...");
-		}
-	}
-
 	public void interruptThread() {
 		running = false;
+		if (!server.isRunning()) out.println("> Server initiated shutdown...");
+		else {
+			String role = isPublisher == null ? "Unregistered user" : isPublisher ? "Publisher" : "Subscriber";
+			String topic = getTopic() == null ? "" : " in topic '" + this.topic + "'";
+			System.out.println("> Client requested to disconnect: " + role + topic + ".");
+		}
 		closeEverything(socket, in, out);
 	}
 

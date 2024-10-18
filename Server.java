@@ -3,19 +3,33 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.util.Arrays;
 import java.util.Scanner;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// todo:
+// todo: priority
+//  ***** fix backlog issue with send command being executed after backlog executions (send is asynchronous? while e.g. list is synchronous)
+//            bufferedMessages print is happening concurrently with receiveMessage() thread, likely root of the issue
+//  *** refactor Client and ClientHandler's processCommand() methods to take in a sanitized String[] tokens instead of a String inputLine
+//         ? Can do out.println(tokens.toString()) and then on receiving end can do String[] tokens = message.split(", ");
+//  *** review code for any unnecessary if's/code and concurrency issues
+
+// todo: secondary
+//  *** see if can break up classes into smaller classes
 //  ** add publisher-specific logs in the event that one of their messages is deleted,
+//  ** make unit tests for all classes
+//  * give clients ability to change roles (publisher to subscriber and vice versa) after registration
 //  * create a Testing class that simulates a client and server interaction
+//  * connect the server to a database to store messages
+//  ? create separate classes for Publisher and Subscriber
+//  ? create separate classes for Topic
 
 public class Server {
 	private final ServerSocket serverSocket;
 	private final ExecutorService pool = Executors.newCachedThreadPool();
-	private boolean running = true;
+	private static boolean running = true;
 	public static int messageCounter = 0; // Used to generate unique message IDs
 	private static boolean isInspecting = false;
 	private String currentInspectTopic = null;
@@ -35,17 +49,10 @@ public class Server {
 					ClientHandler clientHandler = new ClientHandler(socket, this);
 					pool.execute(clientHandler);
 				} catch (SocketTimeoutException e) {
-					// Continue to check if the server is still running
-					if (!running) {
-						break;
-					}
+					if (!running) break; // Continue to check if the server is still running
 				} catch (SocketException e) {
-					if (running) {
-						throw new RuntimeException(e);
-					} else {
-						// Server socket has been closed, exit the loop
-						break;
-					}
+					if (running) throw new RuntimeException(e);
+					else break; // Server socket has been closed, exit the loop
 				}
 			}
 		} catch (IOException e) {
@@ -103,11 +110,12 @@ public class Server {
 			return;
 		}
 
-		String topic = tokens[1];
+		String topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
 		if (!ClientHandler.topics.containsKey(topic)) {
 			System.out.println("> Topic '" + topic + "' does not exist.\n");
 			return;
 		}
+
 		isInspecting = true;
 		currentInspectTopic = topic;
 		System.out.println(
@@ -147,7 +155,7 @@ public class Server {
 			return;
 		}
 
-		CopyOnWriteArrayList<Message> messages = ClientHandler.topics.get(currentInspectTopic);
+		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(currentInspectTopic);
 		if (messages == null || messages.isEmpty()) {
 			System.out.println("> No messages available for topic '" + currentInspectTopic + "'.\n");
 			return;
@@ -166,12 +174,12 @@ public class Server {
 		}
 
 		if (tokens.length < 2 || !tokens[1].matches("\\d+")) {
-			System.out.println("> Usage: delete <messageId> (messageId must be an integer)\n");
+			System.out.println("> Usage: delete <messageId> (see 'listall' for valid id's)\n");
 			return;
 		}
 
 		int messageId = Integer.parseInt(tokens[1]);
-		CopyOnWriteArrayList<Message> messages = ClientHandler.topics.get(currentInspectTopic);
+		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(currentInspectTopic);
 		if (messages == null) {
 			System.out.println("> No messages found for topic '" + currentInspectTopic + "'.\n");
 			return;
@@ -192,13 +200,14 @@ public class Server {
 
 		if (ClientHandler.topics.isEmpty()) {
 			System.out.println("> No topics available.\n");
-		} else {
-			System.out.println("--- EXISTING TOPICS ---");
-			for (String topic : ClientHandler.topics.keySet()) {
-				System.out.println("> " + topic);
-			}
-			System.out.println();
+			return;
 		}
+
+		System.out.println("--- EXISTING TOPICS ---");
+		for (String topic : ClientHandler.topics.keySet()) {
+			System.out.println("> " + topic);
+		}
+		System.out.println();
 	}
 
 	private void showHelp() {
@@ -234,7 +243,6 @@ public class Server {
 		try {
 			System.out.println("> (PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 			for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
-				clientHandler.sendShutdownMessage();
 				clientHandler.interruptThread();
 			}
 
@@ -266,10 +274,8 @@ public class Server {
 
 		try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(args[0]))) {
 			Server server = new Server(serverSocket);
-
 			Thread serverThread = new Thread(server::startServer);
 			serverThread.start();
-
 			server.listenForCommands();
 		} catch (IOException e) {
 			throw new RuntimeException(e);
