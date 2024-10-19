@@ -79,31 +79,16 @@ public class Client {
 		String[] tokens = inputLine.trim().split("\\s+");
 		String command = tokens[0].toLowerCase();
 
-		// If the server is inspecting, queue the command for later execution
-		// todo refactor this in a cleaner way
-		if (isServerInspecting && disabledWhenInspecting.contains(command)) {
-			if (!isPublisher && publisherOnlyCommands.contains(command)) {
+		// If the server is inspecting, verify & queue the command for later execution
+		boolean USING_DISABLED_COMMAND_DURING_INSPECT = isServerInspecting && disabledWhenInspecting.contains(command);
+		if (USING_DISABLED_COMMAND_DURING_INSPECT) {
+			boolean SUB_USING_PUB_COMMAND = !isPublisher && publisherOnlyCommands.contains(command);
+			if (SUB_USING_PUB_COMMAND) {
 				System.out.println("> You cannot use the command '" + command + "' as a subscriber.\n");
-				return;
-			}
-			System.out.println("> Command '" + inputLine + "' will be executed when Inspect mode is ended.\n");
-			synchronized (backlog) {
-
-
-
-
-
-
-
-				// todo test if synchronized is needed
-
-
-
-
-
-
-
-
+			} else {
+				System.out.println(command.startsWith("listall")
+					? "> Command '" + inputLine + "' will execute last (to avoid data inconsistencies) when Inspect mode is ended.\n"
+					: "> Command '" + inputLine + "' has been queued and will execute when Inspect mode is ended.\n");
 				backlog.add(inputLine);
 			}
 			return;
@@ -144,21 +129,30 @@ public class Client {
 	}
 
 	private void showHelp() {
-		System.out.println("--- AVAILABLE COMMANDS ---");
+		System.out.println("--- HELP: AVAILABLE COMMANDS ---");
 		if (isPublisher == null) {
-			System.out.println("> [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for the specified topic");
-		}
-		if (isPublisher != null && !isServerInspecting) {
+			System.out.println("> [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for <topic>");
+		} else {
 			if (isPublisher) { // Only publishers can use these commands
-				System.out.println("> send <message>: Send a message to the server");
-				System.out.println("> list: List the messages you have sent in the topic");
+				System.out.println(
+						(isServerInspecting ? "* " : "") + "> send <message>: Send a message to the server\n" +
+						(isServerInspecting ? "* " : "") + "> list: List the messages you have sent in the topic"
+				);
 			}
 			// Only registered clients (both publishers & subscribers) can use this command
-			System.out.println("> listall: List all messages in the topic");
+			System.out.println((isServerInspecting ? "* " : "") + "> listall: List all messages in the topic");
 		}
 		// All clients (registered & unregistered) can use these commands
-		System.out.println("> show: Show available topics");
-		System.out.println("> quit: Disconnect from the server\n");
+		System.out.println((isServerInspecting ? "  " : "") + "> show: Show available topics");
+		System.out.println((isServerInspecting ? "  " : "") + "> quit: Disconnect from the server\n");
+		if (isServerInspecting) {
+			System.out.println(
+					"""
+							* Commands marked with an asterisk (*) are disabled during Inspect mode.
+							! N.B. Any usage of (*) will be queued and will execute once Inspect mode is ended.
+							"""
+			);
+		}
 	}
 
 	private void handleSendCommand(String[] tokens) {
@@ -215,19 +209,18 @@ public class Client {
 	private void executeBacklogCommands() {
 		if (backlog.isEmpty()) return;
 		synchronized (backlog) {
-			for (String cmd : backlog) {
+//			Sort "list" and "listall" commands to be executed last to avoid interleaving
+			backlog.sort((a, b) -> {
+				if (a.startsWith("list") && !b.startsWith("list")) return 1;
+				if (!a.startsWith("list") && b.startsWith("list")) return -1;
+				return 0;
+			});
 
+			System.out.println("--- COMMANDS TO BE EXECUTED ---");
+			for (String cmd : backlog) System.out.println("> " + (backlog.indexOf(cmd) + 1) + ": " + cmd);
+			System.out.println();
 
-
-
-//	todo			out.println("process " + cmd);     like add in ClientHandler a "process" case that prefixes the command to the backlog execution
-
-
-
-
-
-				processCommand(cmd);
-			}
+			for (String cmd : backlog) processCommand(cmd);
 			backlog.clear();
 		}
 	}

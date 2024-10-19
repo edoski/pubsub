@@ -1,4 +1,3 @@
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -83,6 +82,16 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+	private void sendTopicList() {
+		StringBuilder topicsList = new StringBuilder();
+		topicsList.append("--- SHOW: EXISTING TOPICS ---\n");
+		for (String topic : topics.keySet()) {
+			topicsList.append("> ").append(topic).append("\n");
+		}
+		// Send the topics list to the client
+		out.println(topics.isEmpty() ? "> No topics available.\n" : topicsList);
+	}
+
 	private void listPublisherMessages() {
 		if (isPublisher == null || !isPublisher) {
 			out.println("> You need to register as a publisher first.\n");
@@ -94,21 +103,14 @@ public class ClientHandler implements Runnable {
 			return;
 		}
 
-		out.println("--- YOU SENT " + clientMessages.size() + " MESSAGES IN '" + topic + "' ---\n");
-		for (Message message : clientMessages) {
-			out.println(message.toString());
+		// Important: Use StringBuilder to build the message and print it all at once, avoiding interleaving
+		StringBuilder messageList = new StringBuilder();
+		synchronized (clientMessages) {
+			messageList.append("--- LIST: YOU SENT ").append(clientMessages.size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
+			for (Message msg : clientMessages) messageList.append(msg.toString()).append("\n");
+			messageList.append("--- LIST: END OF MESSAGES YOU SENT ---\n");
+			out.println(messageList);
 		}
-		out.println("--- END OF MESSAGES YOU SENT ---\n");
-	}
-
-	private void sendTopicList() {
-		StringBuilder topicsList = new StringBuilder();
-		topicsList.append("--- EXISTING TOPICS ---\n");
-		for (String topic : topics.keySet()) {
-			topicsList.append("> ").append(topic).append("\n");
-		}
-		// Send the topics list to the client
-		out.println(topics.isEmpty() ? "> No topics available.\n" : topicsList);
 	}
 
 	private void listAllTopicMessages() {
@@ -123,33 +125,37 @@ public class ClientHandler implements Runnable {
 			return;
 		}
 
-		out.println("--- " + messages.size() + " MESSAGES IN '" + topic + "' ---\n");
-		for (Message msg : messages) out.println(msg);
-		out.println("--- END OF MESSAGES IN '" + topic + "' ---\n");
+		// Important: Use StringBuilder to build the message and print it all at once, avoiding interleaving
+		StringBuilder messageList = new StringBuilder();
+		synchronized (messages) {
+			messageList.append("--- LISTALL: ").append(messages.size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
+			for (Message msg : messages) messageList.append(msg.toString()).append("\n");
+			messageList.append("--- LISTALL: END OF MESSAGES IN '").append(topic).append("' ---\n");
+			out.println(messageList);
+		}
 	}
 
 	private void handleRegistration(String[] tokens) {
 		String role = tokens[0].toLowerCase();
 		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
-		isPublisher = role.equals("publish");
+		isPublisher = role.equals("publish"); // Important: Determine if the client is a publisher or subscriber
 
 		System.out.println("> Client registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
 		out.println(
+				"--- REGISTRATION SUCCESSFUL ---\n" +
 				"> Registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.\n" +
 				"> Enter 'help' for a list of available commands.\n"
 		);
 
 		// Ensure the topic is added to the topics map
 		topics.putIfAbsent(topic, new ConcurrentLinkedQueue<>());
-
 		// Check if the server is inspecting this topic and notify the client
-		if (server.isInspectingTopic(topic)) {
-			setIsServerInspecting(true);
-		}
+		if (server.isInspectingTopic(topic)) setIsServerInspecting(true);
 	}
 
 	public void broadcastMessage(String messageBody) {
 		Message message = new Message(topic, messageBody);
+		topics.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>()); // Noticed NullPointerException otherwise
 		topics.get(topic).offer(message);
 		clientMessages.add(message); // Important: Store the message in the client's own list
 		for (ClientHandler clientHandler : clientHandlers) {
@@ -159,13 +165,17 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+	public void broadcastMessageFromServer(String message) {
+		out.println(message);
+	}
+
 	public void setIsServerInspecting(boolean isInspecting) {
 		try {
 			if (isInspecting) {
-				String commands = isPublisher ? "send, list, listall" : "listall";
+				String commands = isPublisher ? "'send', 'list', 'listall'" : "'listall'";
 				out.println("--- SERVER INSPECT STARTED FOR '" + topic + "' ---\n" +
 							"> Regular functionality has been temporarily suspended. See 'help' for a list of available commands.\n" +
-							"> You can still use '" + commands + "', but they will be executed when the server ends Inspect mode.\n");
+							"> You can still use " + commands + ", but will be queued and executed when the server ends Inspect mode.\n");
 			} else {
 				out.println("--- SERVER INSPECT ENDED ---\n" +
 							"> Server has exited Inspect mode for topic '" + topic + "'.\n" +

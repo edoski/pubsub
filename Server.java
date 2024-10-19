@@ -10,21 +10,14 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
-//  FIXED? ***** fix backlog issue with send command being executed after backlog executions (send is asynchronous while list is synchronous, so list is executed first even if send is called first)
-//            bufferedMessages print is happening concurrently with receiveMessage() thread, likely root of the issue
-//  *** refactor Client and ClientHandler's processCommand() methods to take in a sanitized String[] tokens instead of a String inputLine
-//         ? Can do out.println(tokens.toString()) and then on receiving end can do String[] tokens = message.split(", ");
 //  *** review code for any unnecessary if's/code and concurrency issues
+//  *** see if can break up classes into smaller classes
 
 // todo: secondary
-//  *** see if can break up classes into smaller classes
-//  ** add publisher-specific logs in the event that one of their messages is deleted,
-//  ** make unit tests for all classes
-//  * give clients ability to change roles (publisher to subscriber and vice versa) after registration
-//  * create a Testing class that simulates a client and server interaction
-//  * connect the server to a database to store messages
-//  ? create separate classes for Publisher and Subscriber
-//  ? create separate classes for Topic
+//  ? give clients ability to change roles (publisher to subscriber and vice versa) after registration
+//  ? connect the server to a database to store messages
+//  ? make unit tests for all classes
+//  ? create a Testing class that simulates a client and server interaction
 
 public class Server {
 	private final ServerSocket serverSocket;
@@ -118,8 +111,8 @@ public class Server {
 		isInspecting = true;
 		currentInspectTopic = topic;
 		System.out.println(
-				"> Entered Inspect mode for topic '" + topic + "'.\n" +
-				"> Enter 'help' for a list of available commands.\n"
+				"--- INSPECT MODE STARTED ---\n" +
+				"> Begun inspecting topic '" + topic + "'. Enter 'help' for a list of available commands.\n"
 		);
 
 		// Notify clients that the server is inspecting the topic
@@ -138,7 +131,10 @@ public class Server {
 		}
 
 		isInspecting = false;
-		System.out.println("> Exited inspect mode for topic '" + currentInspectTopic + "'.\n");
+		System.out.println(
+				"> Exited inspect mode for topic '" + currentInspectTopic + "'.\n" +
+				"--- INSPECT MODE ENDED ---\n"
+		);
 		// Notify clients that the server has stopped inspecting the topic
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
 			if (currentInspectTopic.equals(clientHandler.getTopic())) {
@@ -159,11 +155,9 @@ public class Server {
 			System.out.println("> No messages available for topic '" + currentInspectTopic + "'.\n");
 			return;
 		}
-		System.out.println("--- " + messages.size() + " MESSAGES IN '" + currentInspectTopic + "' ---\n");
-		for (Message m : messages) {
-			System.out.println(m);
-		}
-		System.out.println("--- END OF MESSAGES IN '" + currentInspectTopic + "' ---\n");
+		System.out.println("--- LISTALL: " + messages.size() + " MESSAGES IN '" + currentInspectTopic + "' ---\n");
+		for (Message m : messages) System.out.println(m);
+		System.out.println("--- LISTALL: END OF MESSAGES IN '" + currentInspectTopic + "' ---\n");
 	}
 
 	private void deleteMessage(String[] tokens) {
@@ -183,12 +177,16 @@ public class Server {
 			System.out.println("> No messages found for topic '" + currentInspectTopic + "'.\n");
 			return;
 		}
+
 		boolean removed = messages.removeIf(m -> m.getId() == messageId);
 		if (removed) {
-			System.out.println("> Message with ID " + messageId + " deleted.\n");
-		} else {
-			System.out.println("> Message with ID " + messageId + " not found.\n");
-		}
+			System.out.println("> (SUCCESS) Message with ID " + messageId + " deleted.\n");
+			for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
+				if (currentInspectTopic.equals(clientHandler.getTopic())) {
+					clientHandler.broadcastMessageFromServer("> MESSAGE (ID " + messageId + ") DELETED BY SERVER");
+				}
+			}
+		} else System.out.println("> (ERROR) Message with ID " + messageId + " not found.\n");
 	}
 
 	private static void showTopics() {
@@ -202,7 +200,7 @@ public class Server {
 			return;
 		}
 
-		System.out.println("--- EXISTING TOPICS ---");
+		System.out.println("--- SHOW: EXISTING TOPICS ---");
 		for (String topic : ClientHandler.topics.keySet()) {
 			System.out.println("> " + topic);
 		}
@@ -210,7 +208,7 @@ public class Server {
 	}
 
 	private void showHelp() {
-		System.out.println("--- AVAILABLE COMMANDS ---");
+		System.out.println("--- HELP: AVAILABLE COMMANDS ---");
 		System.out.println("> show: Show available topics");
 		if (isInspecting) {
 			System.out.println(
@@ -241,9 +239,7 @@ public class Server {
 		running = false;
 		try {
 			System.out.println("> (PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
-			for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
-				clientHandler.interruptThread();
-			}
+			for (ClientHandler clientHandler : ClientHandler.clientHandlers) clientHandler.interruptThread();
 
 			if (!serverSocket.isClosed()) serverSocket.close();
 			pool.shutdownNow();
