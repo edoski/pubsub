@@ -9,6 +9,10 @@ import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+/**
+ * The ClientHandler class manages communication with a connected client.
+ * It processes client commands, broadcasts messages, and maintains client state.
+ */
 public class ClientHandler implements Runnable {
 	public static ConcurrentLinkedQueue<ClientHandler> clientHandlers = new ConcurrentLinkedQueue<>();
 	public static ConcurrentHashMap<String, ConcurrentLinkedQueue<Message>> topics = new ConcurrentHashMap<>();
@@ -21,12 +25,22 @@ public class ClientHandler implements Runnable {
 	private volatile boolean running = true;
 	private final ArrayList<Message> clientMessages = new ArrayList<>(); // Messages sent by this client
 
+	/**
+	 * Constructs a ClientHandler for the given client socket and server.
+	 *
+	 * @param socket the client's socket connection
+	 * @param server the server instance
+	 */
 	public ClientHandler(Socket socket, Server server) {
 		this.server = server;
 		this.socket = socket;
 		clientHandlers.add(this); // Important: Add immediately so both registered and unregistered are handled
 	}
 
+	/**
+	 * The main run method for the ClientHandler thread.
+	 * Listens for messages from the client and processes them.
+	 */
 	@Override
 	public void run() {
 		try {
@@ -51,6 +65,11 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+	/**
+	 * Processes a command or message received from the client.
+	 *
+	 * @param message the message or command from the client
+	 */
 	private void processCommand(String message) {
 		String[] tokens = message.trim().split("\\s+");
 		String command = tokens[0].toLowerCase();
@@ -67,6 +86,9 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+	/**
+	 * "show": Sends the list of existing topics to the client.
+	 */
 	private void sendTopicList() {
 		StringBuilder topicsList = new StringBuilder();
 		topicsList.append("--- SHOW: EXISTING TOPICS ---\n");
@@ -77,6 +99,10 @@ public class ClientHandler implements Runnable {
 		out.println(topics.isEmpty() ? "> No topics available.\n" : topicsList);
 	}
 
+	/**
+	 * "list": Lists the messages sent by this client in the current topic.
+	 * Only available to publishers.
+	 */
 	private void listPublisherMessages() {
 		if (isPublisher == null || !isPublisher) {
 			out.println("> You need to register as a publisher first.\n");
@@ -98,6 +124,9 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+	/**
+	 * "listall": Lists all messages in the current topic.
+	 */
 	private void listAllTopicMessages() {
 		if (isPublisher == null) {
 			out.println("> You need to subscribe/publish to a topic first.\n");
@@ -120,6 +149,12 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+	/**
+	 * Handles registration commands from the client.
+	 * Registers the client as a publisher or subscriber to a topic.
+	 *
+	 * @param tokens the command tokens containing the role and topic
+	 */
 	private void handleRegistration(String[] tokens) {
 		String role = tokens[0].toLowerCase();
 		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
@@ -136,6 +171,12 @@ public class ClientHandler implements Runnable {
 		if (server.isInspectingTopic(topic)) setIsServerInspecting(true); // If server inspecting topic, notify client
 	}
 
+	/**
+	 * "send": Broadcasts a message to all clients subscribed to the same topic.
+	 * Stores the message in the client's own message list.
+	 *
+	 * @param messageBody the body of the message to broadcast
+	 */
 	private void broadcastMessage(String messageBody) {
 		Message message = new Message(topic, messageBody);
 		topics.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>()).offer(message); // Noticed NullPointerException without this
@@ -167,6 +208,9 @@ public class ClientHandler implements Runnable {
 		}
 	}
 
+	/**
+	 * Interrupts the client handler thread and closes resources.
+	 */
 	public void interruptThread() {
 		running = false;
 		if (!server.isRunning()) out.println("> Server initiated shutdown...");
@@ -178,6 +222,13 @@ public class ClientHandler implements Runnable {
 		closeEverything(socket, in, out);
 	}
 
+	/**
+	 * Closes the socket, input, and output streams, and removes the client handler.
+	 *
+	 * @param socket the client's socket
+	 * @param in     the input stream from the client
+	 * @param out    the output stream to the client
+	 */
 	private void closeEverything(Socket socket, BufferedReader in, PrintWriter out) {
 		clientHandlers.remove(this);
 		System.out.println("> Client handler removed. Current handlers: " + clientHandlers.size());

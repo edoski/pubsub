@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
+//  ***** listall messages.size() is giving wrong value when backlog executed
 //  *** see if can break up classes into smaller classes
 
 // todo: secondary
@@ -18,6 +19,11 @@ import java.util.concurrent.Executors;
 //  ? make unit tests for all classes
 //  ? create a Testing class that simulates a client and server interaction
 
+/**
+ * The Server class manages client connections, handles server commands,
+ * and maintains the server's operational state.
+ * It listens for client connections and allows server operators to execute commands.
+ */
 public class Server {
 	private final ServerSocket serverSocket;
 	private final ExecutorService pool = Executors.newCachedThreadPool();
@@ -29,6 +35,10 @@ public class Server {
 		this.serverSocket = serverSocket;
 	}
 
+	/**
+	 * Starts the server to accept client connections and handle them using ClientHandler.
+	 * It listens for incoming connections and executes each ClientHandler in a thread pool.
+	 */
 	private void startServer() {
 		try {
 			System.out.println("--- SERVER STARTED ON PORT " + serverSocket.getLocalPort() + " ---");
@@ -50,6 +60,10 @@ public class Server {
 		}
 	}
 
+	/**
+	 * Listens for server commands from the console input.
+	 * Allows the server operator to execute commands like inspect, listall, delete, etc.
+	 */
 	private void listenForCommands() {
 		Scanner scanner = new Scanner(System.in);
 		while (running) {
@@ -70,6 +84,12 @@ public class Server {
 		}
 	}
 
+	/**
+	 * "inspect": Starts inspect mode for the specified topic.
+	 * In inspect mode, the server operator can list and delete messages in a topic.
+	 *
+	 * @param tokens the command tokens containing the topic name
+	 */
 	private void startInspectMode(String[] tokens) {
 		if (isInspecting) {
 			System.out.println("> Command 'inspect' is not available in inspect mode.\n");
@@ -101,6 +121,10 @@ public class Server {
 
 	}
 
+	/**
+	 * "end": Ends inspect mode for the current topic.
+	 * Notifies clients that the server has stopped inspecting.
+	 */
 	private void endInspectMode() {
 		if (!isInspecting) {
 			System.out.println("> Command 'end' is only available in inspect mode.\n");
@@ -119,6 +143,10 @@ public class Server {
 		currentInspectTopic = null;
 	}
 
+	/**
+	 * "listall": Lists all messages in the current inspect topic.
+	 * Only available when in inspect mode.
+	 */
 	private void listAllMessagesInTopic() {
 		if (!isInspecting) {
 			System.out.println("> Command 'listall' is only available in inspect mode.\n");
@@ -135,6 +163,12 @@ public class Server {
 		System.out.println("--- LISTALL: END OF MESSAGES IN '" + currentInspectTopic + "' ---\n");
 	}
 
+	/**
+	 * "delete": Deletes a message with the specified message ID from the current inspect topic.
+	 * Notifies clients in the topic about the deletion.
+	 *
+	 * @param tokens the command tokens containing the message ID to delete
+	 */
 	private void deleteMessage(String[] tokens) {
 		if (!isInspecting) {
 			System.out.println("> Command 'delete' is only available in inspect mode.\n");
@@ -164,6 +198,10 @@ public class Server {
 		} else System.out.println("> (ERROR) Message with ID " + messageId + " not found.\n");
 	}
 
+	/**
+	 * "show": Displays the list of existing topics.
+	 * Not available during inspect mode.
+	 */
 	private static void showTopics() {
 		if (isInspecting) {
 			System.out.println("> Command 'show' is not available in inspect mode.\n");
@@ -180,6 +218,10 @@ public class Server {
 		System.out.println();
 	}
 
+	/**
+	 * "help": Displays the help menu with available server commands.
+	 * Shows different commands based on whether the server is in inspect mode.
+	 */
 	private void showHelp() {
 		System.out.println("--- HELP: AVAILABLE COMMANDS ---");
 		System.out.println("> show: Show available topics");
@@ -201,6 +243,10 @@ public class Server {
 		return running;
 	}
 
+	/**
+	 * "quit": Shuts down the server gracefully.
+	 * Disconnects all clients and closes the server socket.
+	 */
 	private void shutdownServer() {
 		if (isInspecting) {
 			System.out.println("> Cannot shut down server while in inspect mode.\n");
@@ -222,10 +268,22 @@ public class Server {
 		System.exit(0);
 	}
 
+	/**
+	 * Checks if the server is currently inspecting the given topic.
+	 *
+	 * @param topic the topic to check
+	 * @return true if the server is inspecting the topic, false otherwise
+	 */
 	public synchronized boolean isInspectingTopic(String topic) {
 		return isInspecting && topic.equals(currentInspectTopic);
 	}
 
+	/**
+	 * The main method to start the server.
+	 * Expects a port number as an argument.
+	 *
+	 * @param args command-line arguments, expects one argument: the port number
+	 */
 	public static void main(String[] args) {
 		if (args.length != 1) {
 			System.err.println("Usage: java Server <port>");

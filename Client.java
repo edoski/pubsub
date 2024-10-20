@@ -7,6 +7,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner;
 
+/**
+ * The Client class represents the client-side application.
+ * It connects to the server, sends commands based on user input,
+ * handles server responses, and manages command execution during server inspect mode.
+ */
 public class Client {
 	private Socket socket;
 	private BufferedReader in;
@@ -19,6 +24,11 @@ public class Client {
 	private static final ArrayList<String> publisherOnlyCommands = new ArrayList<>(Arrays.asList("send", "list"));
 	private static final ArrayList<String> disabledWhenInspecting = new ArrayList<>(Arrays.asList("send", "list", "listall"));
 
+	/**
+	 * Constructs a Client with the specified socket connection.
+	 *
+	 * @param socket the socket connection to the server
+	 */
 	public Client(Socket socket) {
 		try {
 			this.socket = socket;
@@ -29,6 +39,10 @@ public class Client {
 		}
 	}
 
+	/**
+	 * Starts the client application.
+	 * Handles user input and sends commands to the server.
+	 */
 	private void start() {
         System.out.println(
                 "--- CONNECTED TO SERVER ON PORT " + socket.getPort() + " ---\n" +
@@ -50,6 +64,10 @@ public class Client {
         }
     }
 
+	/**
+	 * Starts a new thread to listen for messages from the server.
+	 * Handles server responses and updates the client's state accordingly.
+	 */
 	private void receiveMessage() {
 		new Thread(() -> {
 			while (running && !socket.isClosed()) {
@@ -72,8 +90,12 @@ public class Client {
 		}).start();
 	}
 
-	// Heart of the client, processes the input commands
-	// todo refactor this and ClientHandler inputs so that you send sanitized tokens[] directly instead of inputLine
+	 /**
+     * Processes the user's input command.
+     * Sends commands to the server or handles them locally as needed.
+     *
+     * @param inputLine the user's input command
+     */
 	private void processCommand(String inputLine) {
 		if (inputLine.isEmpty()) return;
 		// Sanitize input, split by whitespace
@@ -110,6 +132,10 @@ public class Client {
 		}
 	}
 
+	/**
+	 * "help": Displays the help menu with available client commands.
+	 * Shows different commands based on the client's role and server inspect mode.
+	 */
 	private void showHelp() {
 		System.out.println("--- HELP: AVAILABLE COMMANDS ---");
 		if (isPublisher == null) {
@@ -137,6 +163,12 @@ public class Client {
 		}
 	}
 
+	/**
+	 * "send": Sends a message to the server.
+	 * Only available to publishers.
+	 *
+	 * @param tokens the user's input command tokens
+	 */
 	private void handleSendCommand(String[] tokens) {
 		if (isPublisher == null || !isPublisher) {
 			System.out.println(isPublisher == null
@@ -155,6 +187,12 @@ public class Client {
 		out.println(message);
 	}
 
+	/**
+	 * "publish" | "subscribe": Handles registration commands from the user.
+	 * Registers the client as a publisher or subscriber to a topic.
+	 *
+	 * @param tokens the command tokens containing the role and topic
+	 */
 	private void handleRegistration(String[] tokens) {
 		if (isPublisher != null) {
 			System.out.println("> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n");
@@ -174,6 +212,12 @@ public class Client {
 		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
 	}
 
+	/**
+	 * Handles messages received from the server.
+	 * Updates the client's inspect mode status and executes backlogged commands if necessary.
+	 *
+	 * @param messageFromServer the message received from the server
+	 */
 	private void handleMessageFromServer(String messageFromServer) {
 		String[] tokens = messageFromServer.split("\\s+");
 		if (tokens[0].equals("IS_SERVER_INSPECTING")) {
@@ -185,6 +229,10 @@ public class Client {
 		System.out.println(messageFromServer);
 	}
 
+	/**
+	 * Executes commands that were queued during server inspect mode.
+	 * Commands are executed in order, with 'list' and 'listall' commands executed last.
+	 */
 	private void executeBacklogCommands() {
 		if (backlog.isEmpty()) return;
 		synchronized (backlog) {
@@ -203,6 +251,9 @@ public class Client {
 		}
 	}
 
+	/**
+	 * Closes the socket and input/output streams, and exits the application.
+	 */
 	private void closeEverything() {
 		running = false;
 		try {
@@ -216,6 +267,12 @@ public class Client {
 		}
 	}
 
+	/**
+	 * The main method to start the client application.
+	 * Expects a hostname and port number as arguments.
+	 *
+	 * @param args command-line arguments, expects two arguments: the hostname and port number
+	 */
 	public static void main(String[] args) {
 		if (args.length < 2) {
 			System.err.println("> Usage: java Client <hostname> <port>");
