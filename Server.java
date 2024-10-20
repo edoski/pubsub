@@ -10,11 +10,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
-//  *** review code for any unnecessary if's/code and concurrency issues
 //  *** see if can break up classes into smaller classes
 
 // todo: secondary
-//  ? give clients ability to change roles (publisher to subscriber and vice versa) after registration
+//  ? give clients ability to change roles (publisher to subscriber and vice versa, with confirmation check Y/N) after registration
 //  ? connect the server to a database to store messages
 //  ? make unit tests for all classes
 //  ? create a Testing class that simulates a client and server interaction
@@ -30,25 +29,22 @@ public class Server {
 		this.serverSocket = serverSocket;
 	}
 
-	public void startServer() {
+	private void startServer() {
 		try {
 			System.out.println("--- SERVER STARTED ON PORT " + serverSocket.getLocalPort() + " ---");
-			while (running && !serverSocket.isClosed()) {
+			serverSocket.setSoTimeout(1000); // Set a timeout for accept() to periodically check if the server is still running
+			while (running) {
 				try {
-					serverSocket.setSoTimeout(1000); // Set a timeout for accept() to periodically check if the server is still running
 					Socket socket = serverSocket.accept();
 					System.out.println("--- NEW CLIENT CONNECTED ---");
 					ClientHandler clientHandler = new ClientHandler(socket, this);
 					pool.execute(clientHandler);
-				} catch (SocketTimeoutException e) {
-					if (!running) break; // Continue to check if the server is still running
-				} catch (SocketException e) {
-					if (running) throw new RuntimeException(e);
-					else break; // Server socket has been closed, exit the loop
+				} catch (SocketTimeoutException | SocketException e) {
+					if (!running) break; // Check if the server is still running
 				}
 			}
 		} catch (IOException e) {
-			throw new RuntimeException(e);
+			System.out.println("> Error starting server: " + e.getMessage());
 		} finally {
 			pool.shutdown();
 		}
@@ -57,36 +53,19 @@ public class Server {
 	private void listenForCommands() {
 		Scanner scanner = new Scanner(System.in);
 		while (running) {
-			String commandLine = scanner.nextLine();
-			String[] tokens = commandLine.trim().split("\\s+");
+			String commandLine = scanner.nextLine().trim();
+			if (commandLine.isEmpty()) continue;
+			String[] tokens = commandLine.split("\\s+");
 			String command = tokens[0].toLowerCase();
-
 			switch (command) {
-				case "listall":
-					listAllMessagesInTopic();
-					break;
-				case "delete":
-					deleteMessage(tokens);
-					break;
-				case "end":
-					endInspectMode();
-					break;
-				case "inspect":
-					startInspectMode(tokens);
-					break;
-				case "quit":
-					shutdownServer();
-					break;
-				case "show":
-					showTopics();
-					break;
-				case "help":
-					showHelp();
-					break;
-				case "":
-					break;
-				default:
-					System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
+				case "listall" -> listAllMessagesInTopic();
+				case "delete" -> deleteMessage(tokens);
+				case "end" -> endInspectMode();
+				case "inspect" -> startInspectMode(tokens);
+				case "quit" -> shutdownServer();
+				case "show" -> showTopics();
+				case "help" -> showHelp();
+				default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
 			}
 		}
 	}
@@ -110,10 +89,8 @@ public class Server {
 
 		isInspecting = true;
 		currentInspectTopic = topic;
-		System.out.println(
-				"--- INSPECT MODE STARTED ---\n" +
-				"> Begun inspecting topic '" + topic + "'. Enter 'help' for a list of available commands.\n"
-		);
+		System.out.println("--- INSPECT MODE STARTED ---");
+		System.out.println("> Begun inspecting topic '" + topic + "'. Enter 'help' for a list of available commands.\n");
 
 		// Notify clients that the server is inspecting the topic
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
@@ -131,10 +108,8 @@ public class Server {
 		}
 
 		isInspecting = false;
-		System.out.println(
-				"> Exited inspect mode for topic '" + currentInspectTopic + "'.\n" +
-				"--- INSPECT MODE ENDED ---\n"
-		);
+		System.out.println("> Exited inspect mode for topic '" + currentInspectTopic + "'.");
+		System.out.println("--- INSPECT MODE ENDED ---\n");
 		// Notify clients that the server has stopped inspecting the topic
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
 			if (currentInspectTopic.equals(clientHandler.getTopic())) {
@@ -201,9 +176,7 @@ public class Server {
 		}
 
 		System.out.println("--- SHOW: EXISTING TOPICS ---");
-		for (String topic : ClientHandler.topics.keySet()) {
-			System.out.println("> " + topic);
-		}
+		for (String topic : ClientHandler.topics.keySet()) System.out.println("> " + topic);
 		System.out.println();
 	}
 
@@ -211,15 +184,13 @@ public class Server {
 		System.out.println("--- HELP: AVAILABLE COMMANDS ---");
 		System.out.println("> show: Show available topics");
 		if (isInspecting) {
-			System.out.println(
-					"""
-							> listall: List all messages in the topic
-							> delete <messageId>: Delete a message by ID
-							> end: Exit interactive mode
-							
-							! N.B. Commands "quit" & "inspect" are disabled in interactive mode,
-							\t   client operations (send, list, listall) are suspended until the mode is exited."""
-			);
+			System.out.println("""
+					> listall: List all messages in the topic
+					> delete <messageId>: Delete a message by ID
+					> end: Exit interactive mode
+					
+					! N.B. Commands "quit" & "inspect" are disabled in interactive mode,
+					\t   client's "send", "list", "listall" are suspended until the mode is exited.""");
 		} else {
 			System.out.println("> inspect <topic>: Open interactive mode to inspect a topic (list all messages, delete messages, etc.)");
 			System.out.println("> quit: Disconnect from the server\n");
@@ -240,12 +211,11 @@ public class Server {
 		try {
 			System.out.println("> (PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 			for (ClientHandler clientHandler : ClientHandler.clientHandlers) clientHandler.interruptThread();
-
 			if (!serverSocket.isClosed()) serverSocket.close();
 			pool.shutdownNow();
 			System.out.println("> (POST-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 		} catch (IOException e) {
-			throw new RuntimeException(e);
+			System.out.println("> Error shutting down server: " + e.getMessage());
 		}
 
 		System.out.println("--- SERVER SHUTDOWN ---");
@@ -268,7 +238,7 @@ public class Server {
 			serverThread.start();
 			server.listenForCommands();
 		} catch (IOException e) {
-			throw new RuntimeException(e);
+			System.out.println("> Error starting server: " + e.getMessage());
 		}
 	}
 }

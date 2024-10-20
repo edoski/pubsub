@@ -75,15 +75,14 @@ public class Client {
 	// Heart of the client, processes the input commands
 	// todo refactor this and ClientHandler inputs so that you send sanitized tokens[] directly instead of inputLine
 	private void processCommand(String inputLine) {
+		if (inputLine.isEmpty()) return;
 		// Sanitize input, split by whitespace
 		String[] tokens = inputLine.trim().split("\\s+");
 		String command = tokens[0].toLowerCase();
 
 		// If the server is inspecting, verify & queue the command for later execution
-		boolean USING_DISABLED_COMMAND_DURING_INSPECT = isServerInspecting && disabledWhenInspecting.contains(command);
-		if (USING_DISABLED_COMMAND_DURING_INSPECT) {
-			boolean SUB_USING_PUB_COMMAND = !isPublisher && publisherOnlyCommands.contains(command);
-			if (SUB_USING_PUB_COMMAND) {
+		if (isServerInspecting && disabledWhenInspecting.contains(command)) {
+			if (!isPublisher && publisherOnlyCommands.contains(command)) {
 				System.out.println("> You cannot use the command '" + command + "' as a subscriber.\n");
 			} else {
 				System.out.println(command.startsWith("listall")
@@ -97,34 +96,17 @@ public class Client {
 		// Commands that use out.println() send a request to the client handler to fulfill the command
 		// The rest of the commands are handled entirely or partially locally
 		switch (command) {
-			case "":
-				break;
-			case "help":
-				showHelp();
-				break;
-			case "show":
-				out.println("show");
-				break;
-			case "send":
-				handleSendCommand(tokens);
-				break;
-			case "list":
-				out.println("list");
-				break;
-			case "listall":
-				out.println("listall");
-				break;
-			case "quit":
+			case "help" -> showHelp();
+			case "show" -> out.println("show");
+			case "send" -> handleSendCommand(tokens);
+			case "list" -> out.println("list");
+			case "listall" -> out.println("listall");
+			case "quit" -> {
 				out.println("quit");
 				closeEverything();
-				break;
-			case "publish":
-			case "subscribe":
-				handleRegistration(tokens);
-				break;
-			default:
-				System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
-				break;
+			}
+			case "publish", "subscribe" -> handleRegistration(tokens);
+			default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
 		}
 	}
 
@@ -148,19 +130,18 @@ public class Client {
 		if (isServerInspecting) {
 			System.out.println(
 					"""
-							* Commands marked with an asterisk (*) are disabled during Inspect mode.
-							! N.B. Any usage of (*) will be queued and will execute once Inspect mode is ended.
-							"""
+					* Commands marked with an asterisk (*) are disabled during Inspect mode.
+					! N.B. Any usage of (*) will be queued and will execute once Inspect mode is ended.
+					"""
 			);
 		}
 	}
 
 	private void handleSendCommand(String[] tokens) {
 		if (isPublisher == null || !isPublisher) {
-			String errorMessage = isPublisher == null
+			System.out.println(isPublisher == null
 					? "> You need to register as a publisher first.\n"
-					: "> You are registered as a subscriber. You cannot send messages.\n";
-			System.out.println(errorMessage);
+					: "> You are registered as a subscriber. You cannot send messages.\n");
 			return;
 		}
 
@@ -176,9 +157,7 @@ public class Client {
 
 	private void handleRegistration(String[] tokens) {
 		if (isPublisher != null) {
-			System.out.println(
-					"> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n"
-			);
+			System.out.println("> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n");
 			return;
 		}
 
@@ -209,8 +188,7 @@ public class Client {
 	private void executeBacklogCommands() {
 		if (backlog.isEmpty()) return;
 		synchronized (backlog) {
-//			Sort "list" and "listall" commands to be executed last to avoid interleaving
-			backlog.sort((a, b) -> {
+			backlog.sort((a, b) -> { // Sort "list" and "listall" commands to be executed last to avoid interleaving
 				if (a.startsWith("list") && !b.startsWith("list")) return 1;
 				if (!a.startsWith("list") && b.startsWith("list")) return -1;
 				return 0;
@@ -247,7 +225,6 @@ public class Client {
 		try {
 			Socket socket = new Socket(args[0], Integer.parseInt(args[1]));
 			Client client = new Client(socket);
-
 			client.start();
 		} catch (IOException e) {
 			System.out.println("> Unable to connect to the server.");
