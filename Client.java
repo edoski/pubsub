@@ -50,17 +50,12 @@ public class Client {
         );
         receiveMessage(); // Start the receiveMessage thread
 
+		// Use the main thread for input handling
         try (Scanner scanner = new Scanner(System.in)) {
-            while (running) { // Use the main thread for input handling
-                if (!running) break;
-				processCommand(scanner.nextLine());
-            }
+            while (running) processCommand(scanner.nextLine());
         } catch (Exception e) {
-            if (running) {
-                System.out.println("> Error reading from console: " + e.getMessage());
-                running = false;
-                closeEverything();
-            }
+			System.out.println("> Error reading from console: " + e.getMessage());
+			closeEverything();
         }
     }
 
@@ -70,21 +65,15 @@ public class Client {
 	 */
 	private void receiveMessage() {
 		new Thread(() -> {
-			while (running && !socket.isClosed()) {
+			while (running) {
 				try {
 					String messageFromServer = in.readLine();
-					if (messageFromServer == null) {
-						closeEverything();
-						break; // Server disconnected
-					}
+					if (messageFromServer == null) closeEverything();
 					handleMessageFromServer(messageFromServer);
 				} catch (IOException e) {
-					if (running) {
-						System.out.println("> Connection lost: " + e.getMessage());
-						running = false;
-						closeEverything();
-					}
-					break;
+					if (!running) break;
+					System.out.println("> Connection lost: " + e.getMessage());
+					closeEverything();
 				}
 			}
 		}).start();
@@ -194,9 +183,17 @@ public class Client {
 	 * @param tokens the command tokens containing the role and topic
 	 */
 	private void handleRegistration(String[] tokens) {
-		if (isPublisher != null) {
-			System.out.println("> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n");
-			return;
+		if (isPublisher != null) { // Allow clients to change their role and topic
+			Scanner scanner = new Scanner(System.in);
+			System.out.print(
+					"> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n" +
+					"> Do you want to change your role and topic? (y/n): "
+			);
+			String response = scanner.nextLine().toLowerCase();
+			if (!response.equals("y")) {
+				System.out.println("> OK. Registration unchanged.\n");
+				return;
+			}
 		}
 
 		if (tokens.length < 2) {

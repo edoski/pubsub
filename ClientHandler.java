@@ -6,6 +6,7 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -23,7 +24,7 @@ public class ClientHandler implements Runnable {
 	private Boolean isPublisher = null;
 	private String topic = null;
 	private volatile boolean running = true;
-	private final ArrayList<Message> clientMessages = new ArrayList<>(); // Messages sent by this client
+	private final HashMap<String, ArrayList<Message>> clientMessages = new HashMap<>(); // Messages sent by this client in each topic
 
 	/**
 	 * Constructs a ClientHandler for the given client socket and server.
@@ -49,7 +50,7 @@ public class ClientHandler implements Runnable {
 			this.socket.setSoTimeout(500); // 500ms timeout for operations
 
 			String messageFromClient;
-			while (running && !socket.isClosed()) { // Main loop for handling client messages
+			while (running) { // Main loop for handling client messages
 				try {
 					messageFromClient = in.readLine();  // Blocking call
 					if (messageFromClient == null) break; // Client disconnected
@@ -109,18 +110,18 @@ public class ClientHandler implements Runnable {
 			return;
 		}
 
-		if (clientMessages.isEmpty()) {
+		if (clientMessages.get(topic).isEmpty()) {
 			out.println("> You have not sent any messages in '" + topic + "'.\n");
 			return;
 		}
 
 		// Important: Use StringBuilder to build the message and print it all at once, avoiding interleaving
-		StringBuilder messageList = new StringBuilder();
+		StringBuilder messageOutput = new StringBuilder();
 		synchronized (clientMessages) {
-			messageList.append("--- LIST: YOU SENT ").append(clientMessages.size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
-			clientMessages.forEach(msg -> messageList.append(msg.toString()).append("\n"));
-			messageList.append("--- LIST: END OF MESSAGES YOU SENT ---\n");
-			out.println(messageList);
+			messageOutput.append("--- LIST: YOU SENT ").append(clientMessages.get(topic).size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
+			for (Message msg : clientMessages.get(topic)) messageOutput.append(msg.toString()).append("\n");
+			messageOutput.append("--- LIST: END OF MESSAGES YOU SENT ---\n");
+			out.println(messageOutput);
 		}
 	}
 
@@ -146,11 +147,11 @@ public class ClientHandler implements Runnable {
 		}
 
 		// Important: Use StringBuilder to build the message and print it all at once, avoiding interleaving
-		StringBuilder messageList = new StringBuilder();
-		messageList.append("--- LISTALL: ").append(snapshot.size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
-		for (Message msg : snapshot) messageList.append(msg.toString()).append("\n");
-		messageList.append("--- LISTALL: END OF MESSAGES IN '").append(topic).append("' ---\n");
-		out.println(messageList);
+		StringBuilder messageOutput = new StringBuilder();
+		messageOutput.append("--- LISTALL: ").append(snapshot.size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
+		for (Message msg : snapshot) messageOutput.append(msg.toString()).append("\n");
+		messageOutput.append("--- LISTALL: END OF MESSAGES IN '").append(topic).append("' ---\n");
+		out.println(messageOutput);
 	}
 
 	/**
@@ -172,6 +173,7 @@ public class ClientHandler implements Runnable {
 		);
 
 		topics.putIfAbsent(topic, new ConcurrentLinkedQueue<>()); // Ensure topic is added to topics map
+		clientMessages.putIfAbsent(topic, new ArrayList<>()); // Ensure topic is added to client-specific map
 		if (server.isInspectingTopic(topic)) setIsServerInspecting(true); // If server inspecting topic, notify client
 	}
 
@@ -184,7 +186,7 @@ public class ClientHandler implements Runnable {
 	private void broadcastMessage(String messageBody) {
 		Message message = new Message(topic, messageBody);
 		topics.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>()).offer(message); // Noticed NullPointerException without this
-		clientMessages.add(message); // Important: Store the message in the client's own list
+		clientMessages.computeIfAbsent(topic, k -> new ArrayList<>()).add(message); // Important: Store the message in the client's own list
 		clientHandlers.stream()
 				.filter(ch -> topic.equals(ch.topic))
 				.forEach(ch -> ch.out.println((ch != this ? "> MESSAGE RECEIVED:\n" : "> MESSAGE SENT:\n") + message));

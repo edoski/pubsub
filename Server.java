@@ -10,11 +10,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
-//  ***** listall messages.size() is giving wrong value when backlog executed
 //  *** see if can break up classes into smaller classes
 
 // todo: secondary
-//  ? give clients ability to change roles (publisher to subscriber and vice versa, with confirmation check Y/N) after registration
 //  ? connect the server to a database to store messages
 //  ? make unit tests for all classes
 //  ? create a Testing class that simulates a client and server interaction
