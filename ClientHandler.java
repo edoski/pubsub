@@ -139,14 +139,18 @@ public class ClientHandler implements Runnable {
 			return;
 		}
 
+		// Important: Create a snapshot of the messages to ensure consistency
+		ArrayList<Message> snapshot;
+		synchronized (messages) {
+			snapshot = new ArrayList<>(messages);
+		}
+
 		// Important: Use StringBuilder to build the message and print it all at once, avoiding interleaving
 		StringBuilder messageList = new StringBuilder();
-		synchronized (messages) {
-			messageList.append("--- LISTALL: ").append(messages.size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
-			messages.forEach(msg -> messageList.append(msg.toString()).append("\n"));
-			messageList.append("--- LISTALL: END OF MESSAGES IN '").append(topic).append("' ---\n");
-			out.println(messageList);
-		}
+		messageList.append("--- LISTALL: ").append(snapshot.size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
+		for (Message msg : snapshot) messageList.append(msg.toString()).append("\n");
+		messageList.append("--- LISTALL: END OF MESSAGES IN '").append(topic).append("' ---\n");
+		out.println(messageList);
 	}
 
 	/**
