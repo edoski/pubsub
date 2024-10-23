@@ -22,7 +22,7 @@ import java.util.concurrent.Executors;
  * and maintains the server's operational state.
  * It listens for client connections and allows server operators to execute commands.
  */
-public class Server {
+public class Server  {
 	private final ServerSocket serverSocket;
 	private final ExecutorService pool = Executors.newCachedThreadPool();
 	private static boolean running = true;
@@ -66,6 +66,7 @@ public class Server {
 		Scanner scanner = new Scanner(System.in);
 		while (running) {
 			String commandLine = scanner.nextLine().trim();
+			//if  we try to process and empty command, continue skips the rest of the loop and goes to the next iteration
 			if (commandLine.isEmpty()) continue;
 			String[] tokens = commandLine.split("\\s+");
 			String command = tokens[0].toLowerCase();
@@ -290,6 +291,7 @@ public class Server {
 
 		try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(args[0]))) {
 			Server server = new Server(serverSocket);
+			//when i call start() on the thread, startServer() is called
 			Thread serverThread = new Thread(server::startServer);
 			serverThread.start();
 			server.listenForCommands();

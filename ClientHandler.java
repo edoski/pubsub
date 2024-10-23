@@ -47,7 +47,7 @@ public class ClientHandler implements Runnable {
 		try {
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
-			this.socket.setSoTimeout(500); // 500ms timeout for operations
+			this.socket.setSoTimeout(500); // 500ms timeout for operations, useful for server shutdown
 
 			String messageFromClient;
 			while (running) { // Main loop for handling client messages
@@ -72,6 +72,7 @@ public class ClientHandler implements Runnable {
 	 * @param message the message or command from the client
 	 */
 	private void processCommand(String message) {
+		/* \\s refers to any whitespace character (space, tab, newline).  + means "one or more" of these characters.  */
 		String[] tokens = message.trim().split("\\s+");
 		String command = tokens[0].toLowerCase();
 
