@@ -24,7 +24,7 @@ public class ClientHandler implements Runnable {
 	private PrintWriter out;
 	private Boolean isPublisher = null;
 	private String topic = null;
-	private volatile boolean running = true;
+	private volatile boolean clientRunning = true;
 	private final int userID;
 
 	/**
@@ -51,7 +51,7 @@ public class ClientHandler implements Runnable {
 			this.out = new PrintWriter(socket.getOutputStream(), true);
 
 			String messageFromClient;
-			while (running) { // Main loop for handling client messages
+			while (clientRunning) { // Main loop for handling client messages
 				try {
 					messageFromClient = in.readLine(); // Blocking call
 					if (messageFromClient == null) break; // Client disconnected
@@ -220,7 +220,7 @@ public class ClientHandler implements Runnable {
 	 * Interrupts the client handler thread and closes resources.
 	 */
 	public void interruptThread() {
-		running = false;
+		clientRunning = false;
 		if (!server.isRunning()) out.println("> Server initiated shutdown...");
 		else {
 			String role = isPublisher == null ? "Unregistered user" : isPublisher ? "Publisher" : "Subscriber";

@@ -10,13 +10,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
+//  ***** does Server.isInspectingTopic need to be synchronized? does ClientHandler.clientRunning need to be volatile?
 //  *** see if can break up classes into smaller classes
 //  ** connect the server to a database to store messages
 //  * make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and for server-side also show the number of messages
-//  * add a "users <userID>" server command to show the user's details (current topic, current role, messages sent in current topic)
-//  * add a "disconnect <userID>" command to disconnect a client by ID
+//  * add a "user <userID>" server command to show the user's details (current topic, current role, messages sent in current topic)
+//  * add a "kick <userID>" command to disconnect a client by ID
 //  * add a "clear <topic>" command to clear all messages in a topic (with confirmation)
-//  * add a "clearall" command to clear all messages in all topics (with confirmation)
+//  * add a "export [<userID> | <topic>]" command to save all messages [user sent in all topics (segment by topic) | in a topic] to file
+//  * FOR ANY OF THE ABOVE: update server's showHelp() method to include new commands
 
 // todo: secondary
 //  ? make unit tests for all classes
@@ -30,7 +32,7 @@ import java.util.concurrent.Executors;
 public class Server {
 	private final ServerSocket serverSocket;
 	private final ExecutorService pool = Executors.newCachedThreadPool();
-	private static boolean running = true;
+	private static boolean serverRunning = true;
 	private static boolean isInspecting = false;
 	private String currentInspectTopic = null;
 
@@ -45,14 +47,14 @@ public class Server {
 	private void startServer() {
 		try {
 			System.out.println("--- SERVER STARTED ON PORT " + serverSocket.getLocalPort() + " ---");
-			while (running) {
+			while (serverRunning) {
 				try {
 					Socket socket = serverSocket.accept();
 					System.out.println("--- NEW CLIENT CONNECTED ---");
 					ClientHandler clientHandler = new ClientHandler(socket, this);
 					pool.execute(clientHandler);
 				} catch (SocketTimeoutException | SocketException e) {
-					if (!running) break; // Check if the server is still running
+					if (!serverRunning) break;
 				}
 			}
 		} catch (IOException e) {
@@ -68,7 +70,7 @@ public class Server {
 	 */
 	private void listenForCommands() {
 		Scanner scanner = new Scanner(System.in);
-		while (running) {
+		while (serverRunning) {
 			String commandLine = scanner.nextLine().trim();
 			// If we try to process and empty command, continue skips the rest of the loop and goes to the next iteration
 			if (commandLine.isEmpty()) continue;
@@ -242,7 +244,7 @@ public class Server {
 	}
 
 	public boolean isRunning() {
-		return running;
+		return serverRunning;
 	}
 
 	/**
@@ -255,7 +257,7 @@ public class Server {
 			return;
 		}
 
-		running = false;
+		serverRunning = false;
 		try {
 			System.out.println("> (PRE-QUIT)  Connected clients: " + ClientHandler.clientHandlers.size());
 			for (ClientHandler clientHandler : ClientHandler.clientHandlers) clientHandler.interruptThread();
