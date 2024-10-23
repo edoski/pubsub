@@ -49,7 +49,6 @@ public class ClientHandler implements Runnable {
 		try {
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
-			this.socket.setSoTimeout(500); // 500ms timeout for operations, useful for server shutdown
 
 			String messageFromClient;
 			while (running) { // Main loop for handling client messages
@@ -205,7 +204,7 @@ public class ClientHandler implements Runnable {
 				String commands = isPublisher ? "'send', 'list', 'listall'" : "'listall'";
 				out.println("--- SERVER INSPECT STARTED FOR '" + topic + "' ---\n" +
 							"> Regular functionality has been temporarily suspended. See 'help' for a list of available commands.\n" +
-							"> You can still use " + commands + ", but will be queued and executed when the server ends Inspect mode.\n"
+							"> Use of " + commands + " will be queued and executed when the server ends Inspect mode.\n"
 				);
 			} else out.println("--- SERVER INSPECT ENDED ---\n" +
 							"> Server has exited Inspect mode for topic '" + topic + "'.\n" +
@@ -240,7 +239,7 @@ public class ClientHandler implements Runnable {
 	 */
 	private void closeEverything(Socket socket, BufferedReader in, PrintWriter out) {
 		clientHandlers.remove(this);
-		System.out.println("> Client ID " + userID + " disconnected. Clients currently connected: " + clientHandlers.size());
+		System.out.println("> Client " + userID + " disconnected. Clients currently connected: " + clientHandlers.size());
 		try {
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();

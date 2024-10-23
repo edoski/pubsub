@@ -13,6 +13,10 @@ import java.util.concurrent.Executors;
 //  *** see if can break up classes into smaller classes
 //  ** connect the server to a database to store messages
 //  * make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and for server-side also show the number of messages
+//  * add a "users <userID>" server command to show the user's details (current topic, current role, messages sent in current topic)
+//  * add a "disconnect <userID>" command to disconnect a client by ID
+//  * add a "clear <topic>" command to clear all messages in a topic (with confirmation)
+//  * add a "clearall" command to clear all messages in all topics (with confirmation)
 
 // todo: secondary
 //  ? make unit tests for all classes
@@ -41,7 +45,6 @@ public class Server {
 	private void startServer() {
 		try {
 			System.out.println("--- SERVER STARTED ON PORT " + serverSocket.getLocalPort() + " ---");
-			serverSocket.setSoTimeout(1000); // Set a timeout for accept() to periodically check if the server is still running
 			while (running) {
 				try {
 					Socket socket = serverSocket.accept();
@@ -230,8 +233,8 @@ public class Server {
 					> delete <messageId>: Delete a message by ID
 					> end: Exit interactive mode
 					
-					! N.B. Commands "quit" & "inspect" are disabled in interactive mode,
-					\t   client's "send", "list", "listall" are suspended until the mode is exited.""");
+					! N.B. Commands 'quit' & 'inspect' are disabled in interactive mode,
+					\tclient's 'send', 'list', 'listall' are suspended until the mode is exited.""");
 		} else {
 			System.out.println("> inspect <topic>: Open interactive mode to inspect a topic (list all messages, delete messages, etc.)");
 			System.out.println("> quit: Disconnect from the server\n");
@@ -254,7 +257,7 @@ public class Server {
 
 		running = false;
 		try {
-			System.out.println("> (PRE-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
+			System.out.println("> (PRE-QUIT)  Connected clients: " + ClientHandler.clientHandlers.size());
 			for (ClientHandler clientHandler : ClientHandler.clientHandlers) clientHandler.interruptThread();
 			if (!serverSocket.isClosed()) serverSocket.close();
 			pool.shutdownNow();

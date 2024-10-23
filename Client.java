@@ -128,7 +128,7 @@ public class Client {
 	private void showHelp() {
 		System.out.println("--- HELP: AVAILABLE COMMANDS ---");
 		if (isPublisher == null) {
-			System.out.println("> [publish | subscribe] <topic>: Register as a publisher (read & write) or subscriber (read-only) for <topic>");
+			System.out.println("> [publish | subscribe] <topic>: Register as publisher (read-write) or subscriber (read-only) for <topic>");
 		} else {
 			if (isPublisher) { // Only publishers can use these commands
 				System.out.println(
@@ -183,30 +183,40 @@ public class Client {
 	 * @param tokens the command tokens containing the role and topic
 	 */
 	private void handleRegistration(String[] tokens) {
+		if (tokens.length < 2) {
+			System.out.println("> Usage: " + tokens[0] + " <topic_name>\n");
+			return;
+		}
+
 		if (isPublisher != null) { // Allow clients to change their role and topic
+			String newRole = tokens[0].toLowerCase();
+			String newTopic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length));
+
+			// Check if the client is already registered as a publisher or subscriber for the same topic
+			if (isPublisher == newRole.equals("publish") && topic.equals(newTopic)) {
+				System.out.println("> You are already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n");
+				return;
+			}
+
 			Scanner scanner = new Scanner(System.in);
 			System.out.print(
 					"> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n" +
 					"> Do you want to change your role and topic? (y/n): "
 			);
 			String response = scanner.nextLine().toLowerCase();
-			if (!response.equals("y")) {
+			if (!response.equalsIgnoreCase("y") && !response.equalsIgnoreCase("yes")) {
 				System.out.println("> OK. Registration unchanged.\n");
 				return;
 			}
 		}
 
-		if (tokens.length < 2) {
-			System.out.println("> Usage: " + tokens[0] + " <topic_name>\n");
-			return;
-		}
-
-		// Send registration command to the server
-		out.println(String.join(" ", tokens));
-
+		// Update the client's role and topic client-side
 		String role = tokens[0].toLowerCase();
 		isPublisher = role.equals("publish");
 		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
+
+		// Send registration command to the server to update the client's role and topic server-side
+		out.println(String.join(" ", tokens));
 	}
 
 	/**
