@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class ClientHandler implements Runnable {
 	public static ConcurrentLinkedQueue<ClientHandler> clientHandlers = new ConcurrentLinkedQueue<>();
 	public static ConcurrentHashMap<String, ConcurrentLinkedQueue<Message>> topics = new ConcurrentHashMap<>();
+	private final HashMap<String, ArrayList<Message>> clientMessages = new HashMap<>(); // Messages sent by this client in each topic
 	private final Server server;
 	private final Socket socket;
 	private BufferedReader in;
@@ -24,7 +25,7 @@ public class ClientHandler implements Runnable {
 	private Boolean isPublisher = null;
 	private String topic = null;
 	private volatile boolean running = true;
-	private final HashMap<String, ArrayList<Message>> clientMessages = new HashMap<>(); // Messages sent by this client in each topic
+	private final int userID;
 
 	/**
 	 * Constructs a ClientHandler for the given client socket and server.
@@ -36,6 +37,7 @@ public class ClientHandler implements Runnable {
 		this.server = server;
 		this.socket = socket;
 		clientHandlers.add(this); // Important: Add immediately so both registered and unregistered are handled
+		this.userID = clientHandlers.size();
 	}
 
 	/**
@@ -52,7 +54,7 @@ public class ClientHandler implements Runnable {
 			String messageFromClient;
 			while (running) { // Main loop for handling client messages
 				try {
-					messageFromClient = in.readLine();  // Blocking call
+					messageFromClient = in.readLine(); // Blocking call
 					if (messageFromClient == null) break; // Client disconnected
 					processCommand(messageFromClient);
 				} catch (SocketTimeoutException e) {
@@ -72,7 +74,7 @@ public class ClientHandler implements Runnable {
 	 * @param message the message or command from the client
 	 */
 	private void processCommand(String message) {
-		/* \\s refers to any whitespace character (space, tab, newline).  + means "one or more" of these characters.  */
+		// "\\s" → any whitespace character (space, tab, newline). "+" → "one or more" of these characters.
 		String[] tokens = message.trim().split("\\s+");
 		String command = tokens[0].toLowerCase();
 
@@ -166,7 +168,7 @@ public class ClientHandler implements Runnable {
 		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
 		isPublisher = role.equals("publish"); // Important: Determine if the client is a publisher or subscriber
 
-		System.out.println("> Client registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
+		System.out.println("> Client " + userID + " registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
 		out.println(
 				"--- REGISTRATION SUCCESSFUL ---\n" +
 				"> Registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.\n" +
@@ -224,7 +226,7 @@ public class ClientHandler implements Runnable {
 		else {
 			String role = isPublisher == null ? "Unregistered user" : isPublisher ? "Publisher" : "Subscriber";
 			String topic = getTopic() == null ? "" : " in topic '" + this.topic + "'";
-			System.out.println("> Client requested to disconnect: " + role + topic + ".");
+			System.out.println("> Client " + userID + " requested to disconnect: " + role + topic + ".");
 		}
 		closeEverything(socket, in, out);
 	}
@@ -238,7 +240,7 @@ public class ClientHandler implements Runnable {
 	 */
 	private void closeEverything(Socket socket, BufferedReader in, PrintWriter out) {
 		clientHandlers.remove(this);
-		System.out.println("> Client handler removed. Current handlers: " + clientHandlers.size());
+		System.out.println("> Client ID " + userID + " disconnected. Clients currently connected: " + clientHandlers.size());
 		try {
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
