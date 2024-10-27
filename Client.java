@@ -91,12 +91,13 @@ public class Client {
 		String[] tokens = inputLine.trim().split("\\s+");
 		String command = tokens[0].toLowerCase();
 
+
 		// If the server is inspecting, verify & queue the command for later execution
 		if (isServerInspecting && disabledWhenInspecting.contains(command)) {
 			if (!isPublisher && publisherOnlyCommands.contains(command)) {
 				System.out.println("> You cannot use the command '" + command + "' as a subscriber.\n");
 			} else {
-				System.out.println(command.startsWith("listall")
+				System.out.println(command.equals("listall")
 					? "> Command '" + inputLine + "' will execute last (to avoid data inconsistencies) when Inspect mode is ended.\n"
 					: "> Command '" + inputLine + "' has been queued and will execute when Inspect mode is ended.\n");
 				backlog.add(inputLine);
@@ -216,6 +217,7 @@ public class Client {
 		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
 
 		// Send registration command to the server to update the client's role and topic server-side
+		//token 0 is the role, token 1 is the topic --> "publish football"
 		out.println(String.join(" ", tokens));
 	}
 
@@ -227,6 +229,7 @@ public class Client {
 	 */
 	private void handleMessageFromServer(String messageFromServer) {
 		String[] tokens = messageFromServer.split("\\s+");
+
 		if (tokens[0].equals("IS_SERVER_INSPECTING")) {
 			isServerInspecting = Boolean.parseBoolean(tokens[1]);
 			if (!isServerInspecting) executeBacklogCommands();

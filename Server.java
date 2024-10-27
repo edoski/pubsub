@@ -10,15 +10,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
-//  ***** does Server.isInspectingTopic need to be synchronized? does ClientHandler.clientRunning need to be volatile?
 //  *** see if can break up classes into smaller classes
 //  ** connect the server to a database to store messages
 //  * make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and for server-side also show the number of messages
-//  * add a "user <userID>" server command to show the user's details (current topic, current role, messages sent in current topic)
-//  * add a "kick <userID>" command to disconnect a client by ID
+//  * add a "users <userID>" server command to show the user's details (current topic, current role, messages sent in current topic)
+//  * add a "disconnect <userID>" command to disconnect a client by ID
 //  * add a "clear <topic>" command to clear all messages in a topic (with confirmation)
-//  * add a "export [<userID> | <topic>]" command to save all messages [user sent in all topics (segment by topic) | in a topic] to file
-//  * FOR ANY OF THE ABOVE: update server's showHelp() method to include new commands
+//  * add a "clearall" command to clear all messages in all topics (with confirmation)
+//  * improve listPublisherMessages function, because if the server deletes something during inspect mode and the client
+//    that send the deleted message digits list, he will get all the messages, including the deleted one
 
 // todo: secondary
 //  ? make unit tests for all classes
@@ -32,7 +32,7 @@ import java.util.concurrent.Executors;
 public class Server {
 	private final ServerSocket serverSocket;
 	private final ExecutorService pool = Executors.newCachedThreadPool();
-	private static boolean serverRunning = true;
+	private static boolean running = true;
 	private static boolean isInspecting = false;
 	private String currentInspectTopic = null;
 
@@ -47,14 +47,14 @@ public class Server {
 	private void startServer() {
 		try {
 			System.out.println("--- SERVER STARTED ON PORT " + serverSocket.getLocalPort() + " ---");
-			while (serverRunning) {
+			while (running) {
 				try {
 					Socket socket = serverSocket.accept();
 					System.out.println("--- NEW CLIENT CONNECTED ---");
 					ClientHandler clientHandler = new ClientHandler(socket, this);
 					pool.execute(clientHandler);
 				} catch (SocketTimeoutException | SocketException e) {
-					if (!serverRunning) break;
+					if (!running) break; // Check if the server is still running
 				}
 			}
 		} catch (IOException e) {
@@ -70,7 +70,7 @@ public class Server {
 	 */
 	private void listenForCommands() {
 		Scanner scanner = new Scanner(System.in);
-		while (serverRunning) {
+		while (running) {
 			String commandLine = scanner.nextLine().trim();
 			// If we try to process and empty command, continue skips the rest of the loop and goes to the next iteration
 			if (commandLine.isEmpty()) continue;
@@ -120,7 +120,7 @@ public class Server {
 		// Notify clients that the server is inspecting the topic
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
 			if (topic.equals(clientHandler.getTopic())) {
-				clientHandler.setIsServerInspecting(true);
+				clientHandler.setIsServerInspecting(isInspecting);
 			}
 		}
 	}
@@ -141,7 +141,7 @@ public class Server {
 		// Notify clients that the server has stopped inspecting the topic
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
 			if (currentInspectTopic.equals(clientHandler.getTopic())) {
-				clientHandler.setIsServerInspecting(false);
+				clientHandler.setIsServerInspecting(isInspecting);
 			}
 		}
 		currentInspectTopic = null;
@@ -228,7 +228,6 @@ public class Server {
 	 */
 	private void showHelp() {
 		System.out.println("--- HELP: AVAILABLE COMMANDS ---");
-		System.out.println("> show: Show available topics");
 		if (isInspecting) {
 			System.out.println("""
 					> listall: List all messages in the topic
@@ -238,13 +237,14 @@ public class Server {
 					! N.B. Commands 'quit' & 'inspect' are disabled in interactive mode,
 					\tclient's 'send', 'list', 'listall' are suspended until the mode is exited.""");
 		} else {
+			System.out.println("> show: Show available topics");
 			System.out.println("> inspect <topic>: Open interactive mode to inspect a topic (list all messages, delete messages, etc.)");
 			System.out.println("> quit: Disconnect from the server\n");
 		}
 	}
 
 	public boolean isRunning() {
-		return serverRunning;
+		return running;
 	}
 
 	/**
@@ -257,7 +257,7 @@ public class Server {
 			return;
 		}
 
-		serverRunning = false;
+		running = false;
 		try {
 			System.out.println("> (PRE-QUIT)  Connected clients: " + ClientHandler.clientHandlers.size());
 			for (ClientHandler clientHandler : ClientHandler.clientHandlers) clientHandler.interruptThread();

@@ -100,12 +100,15 @@ public class ClientHandler implements Runnable {
 		}
 		// Send the topics list to the client
 		out.println(topics.isEmpty() ? "> No topics available.\n" : topicsList);
+
 	}
 
 	/**
 	 * "list": Lists the messages sent by this client in the current topic.
 	 * Only available to publishers.
 	 */
+
+
 	private void listPublisherMessages() {
 		if (isPublisher == null || !isPublisher) {
 			out.println("> You need to register as a publisher first.\n");
