@@ -10,9 +10,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
-//  ***** does Server.isInspectingTopic need to be synchronized? does ClientHandler.clientRunning need to be volatile?
-//  *** see if can break up classes into smaller classes
-//  ** connect the server to a database to store messages
 //  * make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and also show the number of messages
 //  * add a "user <userID>" server command to show the user's details (current topic, current role, messages sent in current topic)
 //  * add a "kick <userID>" command to disconnect a client by ID
@@ -25,6 +22,32 @@ import java.util.concurrent.Executors;
 // todo: secondary
 //  ? make unit tests for all classes
 //  ? create a Testing class that simulates a client and server interaction
+
+/*todo: firebase
+ * 1. add registration/login feature (username:password)
+ * 2. userID becomes username
+ * 3. Firebase db collections
+ *      Clients {
+ *          username1 (created by client at registration): {
+ *              password: idem
+ *              isPublisher: the role which the user was before disconnecting in previous session || null aka unregistered client if first time client
+ *              messages: {
+ *                  topic1: list of username1-ONLY messages for topic 1
+ *                  topic2: messages list for topic 2
+ *                  ...
+ *                  topic_m: messages list for topic m
+ *              }
+ *          },
+ *          username2 {}...,
+ *          username2 {}...
+ *      }
+ * .
+ *      Messages {
+ *          topic1: list of ALL messages for topic 1
+ *          topic2: list of ALL messages for topic 2
+ *          topic_n: list of ALL messages for topic n
+ *      }
+ */
 
 /**
  * The Server class manages client connections, handles server commands,
@@ -280,7 +303,7 @@ public class Server {
 	 * @param topic the topic to check
 	 * @return true if the server is inspecting the topic, false otherwise
 	 */
-	public synchronized boolean isInspectingTopic(String topic) {
+	public boolean isInspectingTopic(String topic) {
 		return isInspecting && topic.equals(currentInspectTopic);
 	}
 

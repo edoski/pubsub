@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class Message {
 	private static final AtomicInteger messageCounter = new AtomicInteger(0); // Unique ID for each message
-	private final int uuid;
+	private final int messageID;
 	private final String message;
 	private final String topic;
 	private final Date timestamp = new Date();
@@ -21,7 +21,7 @@ public class Message {
 	 * @param message the content of the message
 	 */
 	public Message(String topic, String message) {
-		this.uuid = messageCounter.getAndIncrement();
+		this.messageID = messageCounter.getAndIncrement();
 		this.topic = topic;
 		this.message = message.replaceAll("(.{80})", "$1\n"); // Wrap lines at 80 characters
 	}
@@ -35,12 +35,12 @@ public class Message {
 	public String toString() {
 		return    "--------------------------------------------------------------------------------\n"
 				+ dateFormat.format(timestamp) + "\n"
-				+ "[ID " + uuid + " | TOPIC '"  + topic + "']\n"
+				+ "[ID " + messageID + " | TOPIC '"  + topic + "']\n"
 				+ "BODY: " + message + "\n"
 				+ "--------------------------------------------------------------------------------\n";
 	}
 
 	public int getId() {
-		return uuid;
+		return messageID;
 	}
 }

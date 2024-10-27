@@ -24,7 +24,7 @@ public class ClientHandler implements Runnable {
 	private PrintWriter out;
 	private Boolean isPublisher = null;
 	private String topic = null;
-	private volatile boolean clientRunning = true;
+	private boolean clientRunning = true; // Originally was volatile, however realized it is unnecessary
 	private final int userID;
 
 	/**
@@ -107,8 +107,6 @@ public class ClientHandler implements Runnable {
 	 * "list": Lists the messages sent by this client in the current topic.
 	 * Only available to publishers.
 	 */
-
-
 	private void listPublisherMessages() {
 		if (isPublisher == null || !isPublisher) {
 			out.println("> You need to register as a publisher first.\n");

@@ -34,6 +34,7 @@ public class Client {
 			this.socket = socket;
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
+			// todo add userID here?
 		} catch (IOException e) {
 			closeEverything();
 		}
