@@ -16,8 +16,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class ClientHandler implements Runnable {
 	public static ConcurrentLinkedQueue<ClientHandler> clientHandlers = new ConcurrentLinkedQueue<>();
-	public static ConcurrentHashMap<String, ConcurrentLinkedQueue<Message>> topics = new ConcurrentHashMap<>();
-	public static final HashMap<String, ArrayList<Message>> clientMessages = new HashMap<>(); // Messages sent by this client in each topic
+	public static ConcurrentHashMap<String, ConcurrentLinkedQueue<Message>> topics = new ConcurrentHashMap<>(); //topic - ListOfmessages
+	public final HashMap<String, ConcurrentLinkedQueue<Message>> clientMessages = new HashMap<>(); // Messages sent by this client in each topic
 	private final Server server;
 	private final Socket socket;
 	private BufferedReader in;
@@ -121,7 +121,9 @@ public class ClientHandler implements Runnable {
 		// Important: Use StringBuilder to build the message and print it all at once, avoiding interleaving
 		StringBuilder messageOutput = new StringBuilder();
 		synchronized (clientMessages) {
+			//check if the messages have been deleted by the server
 			messageOutput.append("--- LIST: YOU SENT ").append(clientMessages.get(topic).size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
+
 			for (Message msg : clientMessages.get(topic)) messageOutput.append(msg.toString()).append("\n");
 			messageOutput.append("--- LIST: END OF MESSAGES YOU SENT ---\n");
 			out.println(messageOutput);
@@ -176,7 +178,7 @@ public class ClientHandler implements Runnable {
 		);
 
 		topics.putIfAbsent(topic, new ConcurrentLinkedQueue<>()); // Ensure topic is added to topics map
-		clientMessages.putIfAbsent(topic, new ArrayList<>()); // Ensure topic is added to client-specific map
+		clientMessages.putIfAbsent(topic, new ConcurrentLinkedQueue<>()); // Ensure topic is added to client-specific map
 		if (server.isInspectingTopic(topic)) setIsServerInspecting(true); // If server inspecting topic, notify client
 	}
 
@@ -189,7 +191,7 @@ public class ClientHandler implements Runnable {
 	private void broadcastMessage(String messageBody) {
 		Message message = new Message(topic, messageBody);
 		topics.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>()).offer(message); // Noticed NullPointerException without this
-		clientMessages.computeIfAbsent(topic, k -> new ArrayList<>()).add(message); // Important: Store the message in the client's own list
+		clientMessages.computeIfAbsent(topic, k -> new ConcurrentLinkedQueue<>()).add(message); // Important: Store the message in the client's own list
 		clientHandlers.stream()
 				.filter(ch -> topic.equals(ch.topic))
 				.forEach(ch -> ch.out.println((ch != this ? "> MESSAGE RECEIVED:\n" : "> MESSAGE SENT:\n") + message));

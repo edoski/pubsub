@@ -209,6 +209,8 @@ public class Server {
 			return;
 		}
 
+		//ConcurrentLinkedQueue<ClientHandler> clientHandlers = ClientHandler.clientHandlers;
+
 		int messageId = Integer.parseInt(tokens[1]);
 		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(currentInspectTopic);
 		if (messages == null) {
@@ -216,8 +218,10 @@ public class Server {
 			return;
 		}
 
-		boolean removed = messages.removeIf(m -> m.getId() == messageId);
-		if (removed) {
+		boolean removedFromTopic = messages.removeIf(m -> m.getId() == messageId);
+		boolean removedFromClient = deleteFromClient(messageId);
+
+		if (removedFromTopic && removedFromClient) {
 			System.out.println("> (SUCCESS) Message with ID " + messageId + " deleted.\n");
 			for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
 				if (currentInspectTopic.equals(clientHandler.getTopic())) {
@@ -225,6 +229,17 @@ public class Server {
 				}
 			}
 		} else System.out.println("> (ERROR) Message with ID " + messageId + " not found.\n");
+	}
+
+	public boolean deleteFromClient(int messId) {
+
+		for(ClientHandler clientHandler: ClientHandler.clientHandlers) {
+			if (clientHandler.clientMessages.get(currentInspectTopic).removeIf(m -> m.getId() == messId)) {
+				return true;
+			}
+		}
+		//(!ClientHandler.topics.get(currentInspectTopic).contains(msg)) clientMessages.get(topic).remove(msg)
+		return false;
 	}
 
 	/**
