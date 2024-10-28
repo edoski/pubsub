@@ -3,6 +3,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -10,19 +11,21 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 // todo: priority
-//  * make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and also show the number of messages
-//  * add a "user <userID>" server command to show the user's details (current topic, current role, messages sent in current topic)
-//  * add a "kick <userID>" command to disconnect a client by ID
-//  * add a "clear <topic>" command to clear all messages in a topic (with confirmation)
 //  * add a "export [user <userID> | topic <topic>]" command to save all messages [user sent in all topics (segment by topic) | in a topic] to file
+//  * add a "clear <topic>" command to clear all messages in a topic (with confirmation)
+//  .
+//  * make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and also show the number of messages
+//  * add a "users" server command to show all connected users and their details (current topic, current role, messages sent in current topic)
+//  * add a "user <userID>" server command to show the user's details (current topic, current role, messages sent in current topic)
+//  .
 //  * FOR ANY OF THE ABOVE: update server's showHelp() method to include new commands
-//
 
 // todo: secondary
 //  ? make unit tests for all classes
 //  ? create a Testing class that simulates a client and server interaction
 
 /*todo: firebase
+ * IF WE DON'T DO DB WE CAN PUT THIS IN OUR DOC AS A POINT WE CONSIDERED
  * 1. add registration/login feature (username:password)
  * 2. userID becomes username
  * 3. Firebase db collections
@@ -92,6 +95,7 @@ public class Server {
 	 * Listens for server commands from the console input.
 	 * Allows the server operator to execute commands like inspect, listall, delete, etc.
 	 */
+//	todo: add intermediary parseTokens() method to handle command parsing instead of parsing in each command method
 	private void listenForCommands() {
 		Scanner scanner = new Scanner(System.in);
 		while (serverRunning) {
@@ -101,16 +105,41 @@ public class Server {
 			String[] tokens = commandLine.split("\\s+");
 			String command = tokens[0].toLowerCase();
 			switch (command) {
+				case "quit" -> shutdownServer();
+				case "inspect" -> startInspectMode(tokens);
 				case "listall" -> listAllMessagesInTopic();
 				case "delete" -> deleteMessage(tokens);
 				case "end" -> endInspectMode();
-				case "inspect" -> startInspectMode(tokens);
-				case "quit" -> shutdownServer();
 				case "show" -> showTopics();
 				case "help" -> showHelp();
+				case "kick" -> kickClient(tokens);
 				default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
 			}
 		}
+	}
+
+//	todo: removed server-side logs for client requesting to disconnect since in this scenario the server is the one that initiates the disconnect
+	private void kickClient(String[] tokens) {
+		if (tokens.length < 2) {
+			System.out.println("> Usage: kick <userID>\n");
+			return;
+		}
+
+		if (!tokens[1].matches("\\d+")) {
+			System.out.println("> Invalid user ID.\n");
+			return;
+		}
+
+		int userID = Integer.parseInt(tokens[1]);
+		for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
+			if (clientHandler.getUserID() == userID) {
+				clientHandler.broadcastMessageFromServer("> You have been kicked by the server.");
+				clientHandler.interruptThread();
+				System.out.println("> Client with ID '" + userID + "' has been kicked.\n");
+				return;
+			}
+		}
+		System.out.println("> Client with ID '" + userID + "' not found.\n");
 	}
 
 	/**
@@ -204,40 +233,35 @@ public class Server {
 		}
 
 		if (tokens.length < 2 || !tokens[1].matches("\\d+")) {
-			System.out.println("> Usage: delete <messageId> (see 'listall' for valid id's)\n");
+			System.out.println("> Usage: delete <messageID> (see 'listall' for valid id's)\n");
 			return;
 		}
 
-		//ConcurrentLinkedQueue<ClientHandler> clientHandlers = ClientHandler.clientHandlers;
-
-		int messageId = Integer.parseInt(tokens[1]);
+		int messageID = Integer.parseInt(tokens[1]);
 		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(currentInspectTopic);
 		if (messages == null) {
 			System.out.println("> No messages found for topic '" + currentInspectTopic + "'.\n");
 			return;
 		}
 
-		boolean removedFromTopic = messages.removeIf(m -> m.getId() == messageId);
-		boolean removedFromClient = deleteFromClient(messageId);
+		boolean removedFromTopic = messages.removeIf(msg -> msg.getId() == messageID);
+		boolean removedFromClient = deleteFromClient(messageID);
 
 		if (removedFromTopic && removedFromClient) {
-			System.out.println("> (SUCCESS) Message with ID " + messageId + " deleted.\n");
+			System.out.println("> (SUCCESS) Message with ID " + messageID + " deleted.\n");
 			for (ClientHandler clientHandler : ClientHandler.clientHandlers) {
 				if (currentInspectTopic.equals(clientHandler.getTopic())) {
-					clientHandler.broadcastMessageFromServer("> MESSAGE (ID " + messageId + ") DELETED BY SERVER");
+					clientHandler.broadcastMessageFromServer("> MESSAGE (ID " + messageID + ") DELETED BY SERVER");
 				}
 			}
-		} else System.out.println("> (ERROR) Message with ID " + messageId + " not found.\n");
+		} else System.out.println("> (ERROR) Message with ID " + messageID + " not found.\n");
 	}
 
 	public boolean deleteFromClient(int messId) {
-
 		for(ClientHandler clientHandler: ClientHandler.clientHandlers) {
-			if (clientHandler.clientMessages.get(currentInspectTopic).removeIf(m -> m.getId() == messId)) {
-				return true;
-			}
+			ArrayList<Message> messages = clientHandler.publisherMessages.get(currentInspectTopic);
+			if (messages.removeIf(m -> m.getId() == messId)) return true;
 		}
-		//(!ClientHandler.topics.get(currentInspectTopic).contains(msg)) clientMessages.get(topic).remove(msg)
 		return false;
 	}
 
