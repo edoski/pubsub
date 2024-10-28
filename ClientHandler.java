@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class ClientHandler implements Runnable {
 	public static ConcurrentLinkedQueue<ClientHandler> clientHandlers = new ConcurrentLinkedQueue<>();
 	public static ConcurrentHashMap<String, ConcurrentLinkedQueue<Message>> topics = new ConcurrentHashMap<>();
-	private final HashMap<String, ArrayList<Message>> clientMessages = new HashMap<>(); // Messages sent by this client in each topic
+	public static final HashMap<String, ArrayList<Message>> clientMessages = new HashMap<>(); // Messages sent by this client in each topic
 	private final Server server;
 	private final Socket socket;
 	private BufferedReader in;
