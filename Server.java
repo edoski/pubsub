@@ -16,8 +16,7 @@ import java.util.concurrent.Executors;
 //  * add a "clear <topic>" command to clear all messages in a topic (with confirmation)
 //  * add a "export [user <userID> | topic <topic>]" command to save all messages [user sent in all topics (segment by topic) | in a topic] to file
 //  * FOR ANY OF THE ABOVE: update server's showHelp() method to include new commands
-//  * improve listPublisherMessages function, because if the server deletes something during inspect mode and the client
-//    that send the deleted message digits list, he will get all the messages, including the deleted one
+//
 
 // todo: secondary
 //  ? make unit tests for all classes
