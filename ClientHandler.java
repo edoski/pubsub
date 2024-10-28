@@ -9,15 +9,16 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The ClientHandler class manages communication with a connected client.
  * It processes client commands, broadcasts messages, and maintains client state.
  */
 public class ClientHandler implements Runnable {
-	public static ConcurrentLinkedQueue<ClientHandler> clientHandlers = new ConcurrentLinkedQueue<>();
-	public static ConcurrentHashMap<String, ConcurrentLinkedQueue<Message>> topics = new ConcurrentHashMap<>(); //topic - ListOfmessages
-	public final HashMap<String, ArrayList<Message>> publisherMessages = new HashMap<>(); // Messages sent by this client in each topic
+	public static ConcurrentHashMap<Integer, ClientHandler> clientHandlers = new ConcurrentHashMap<>(); // userID : ClientHandler
+	public static ConcurrentHashMap<String, ConcurrentLinkedQueue<Message>> topics = new ConcurrentHashMap<>(); // topic : all-messages-of-topic
+	public final HashMap<String, ArrayList<Message>> publisherMessages = new HashMap<>(); // topic : messages-sent-by-client
 	private final Server server;
 	private final Socket socket;
 	private BufferedReader in;
@@ -25,6 +26,7 @@ public class ClientHandler implements Runnable {
 	private Boolean isPublisher = null;
 	private String topic = null;
 	private boolean clientRunning = true; // Originally was volatile, however realized it is unnecessary
+	private static final AtomicInteger clientCounter = new AtomicInteger(0); // Unique ID for each client
 	private final int userID;
 
 	/**
@@ -36,8 +38,8 @@ public class ClientHandler implements Runnable {
 	public ClientHandler(Socket socket, Server server) {
 		this.server = server;
 		this.socket = socket;
-		clientHandlers.add(this); // Important: Add immediately so both registered and unregistered are handled
-		this.userID = clientHandlers.size() - 1;
+		this.userID = clientCounter.getAndIncrement();
+		clientHandlers.put(this.userID, this); // Important: Add immediately so both registered and unregistered are handled
 	}
 
 	/**
@@ -121,9 +123,7 @@ public class ClientHandler implements Runnable {
 		// Important: Use StringBuilder to build the message and print it all at once, avoiding interleaving
 		StringBuilder messageOutput = new StringBuilder();
 		synchronized (publisherMessages) {
-			//check if the messages have been deleted by the server
 			messageOutput.append("--- LIST: YOU SENT ").append(publisherMessages.get(topic).size()).append(" MESSAGES IN '").append(topic).append("' ---\n\n");
-
 			for (Message msg : publisherMessages.get(topic)) messageOutput.append(msg.toString()).append("\n");
 			messageOutput.append("--- LIST: END OF MESSAGES YOU SENT ---\n");
 			out.println(messageOutput);
@@ -170,7 +170,7 @@ public class ClientHandler implements Runnable {
 		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
 		isPublisher = role.equals("publish"); // Important: Determine if the client is a publisher or subscriber
 
-		System.out.println("> Client " + userID + " registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
+		System.out.println("> Client (ID " + userID + ") registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.");
 		out.println(
 				"--- REGISTRATION SUCCESSFUL ---\n" +
 				"> Registered as '" + (isPublisher ? "publisher" : "subscriber") + "' on topic '" + topic + "'.\n" +
@@ -179,7 +179,7 @@ public class ClientHandler implements Runnable {
 
 		topics.putIfAbsent(topic, new ConcurrentLinkedQueue<>()); // Ensure topic is added to topics map
 		publisherMessages.putIfAbsent(topic, new ArrayList<>()); // Ensure topic is added to client-specific map
-		if (server.isInspectingTopic(topic)) setIsServerInspecting(true); // If server inspecting topic, notify client
+		if (server.isInspectingTopic(topic)) setIsServerInspecting(true); // Important: If server inspecting topic, notify client
 	}
 
 	/**
@@ -192,7 +192,7 @@ public class ClientHandler implements Runnable {
 		Message message = new Message(topic, messageBody);
 		topics.computeIfAbsent(topic, msgs -> new ConcurrentLinkedQueue<>()).offer(message); // Noticed NullPointerException without this
 		publisherMessages.computeIfAbsent(topic, msgs -> new ArrayList<>()).add(message); // Important: Store the message in the client's own list
-		clientHandlers.stream()
+		clientHandlers.values().stream()
 				.filter(ch -> topic.equals(ch.topic))
 				.forEach(ch -> ch.out.println((ch != this ? "> MESSAGE RECEIVED:\n" : "> MESSAGE SENT:\n") + message));
 	}
@@ -209,7 +209,7 @@ public class ClientHandler implements Runnable {
 							"> Regular functionality has been temporarily suspended. See 'help' for a list of available commands.\n" +
 							"> Use of " + commands + " will be queued and executed when the server ends Inspect mode.\n"
 				);
-			} else out.println("--- SERVER INSPECT ENDED ---\n" +
+			} else out.println("--- SERVER INSPECT ENDED FOR '" + topic + "' ---\n" +
 							"> Server has exited Inspect mode for topic '" + topic + "'.\n" +
 							"> Any backlogged commands will now be executed.\n"
 			);
@@ -225,11 +225,24 @@ public class ClientHandler implements Runnable {
 	public void interruptThread() {
 		clientRunning = false;
 		if (!server.isRunning()) out.println("> Server initiated shutdown...");
-//		todo: else if server has kicked client, notify client
 		else {
 			String role = isPublisher == null ? "Unregistered user" : isPublisher ? "Publisher" : "Subscriber";
 			String topic = getTopic() == null ? "" : " in topic '" + this.topic + "'";
 			System.out.println("> Client " + userID + " requested to disconnect: " + role + topic + ".");
+		}
+		closeEverything(socket, in, out);
+	}
+
+	/**
+	 * Interrupts the client handler thread and closes resources.
+	 * Overloaded method to handle client kicks.
+	 * @param isKicked true if the client was kicked from the server
+	 */
+	public void interruptThread(boolean isKicked) {
+		clientRunning = false;
+		if (isKicked) {
+			out.println("> You have been kicked from the server.");
+			System.out.println("> Client " + userID + " has been kicked from the server.");
 		}
 		closeEverything(socket, in, out);
 	}
@@ -242,8 +255,8 @@ public class ClientHandler implements Runnable {
 	 * @param out    the output stream to the client
 	 */
 	private void closeEverything(Socket socket, BufferedReader in, PrintWriter out) {
-		clientHandlers.remove(this);
-		System.out.println("> Client " + userID + " disconnected. Clients currently connected: " + clientHandlers.size());
+		clientHandlers.remove(userID);
+		System.out.println("> Client " + userID + " disconnected. Clients currently connected: " + clientHandlers.size() + ".");
 		try {
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
@@ -255,9 +268,5 @@ public class ClientHandler implements Runnable {
 
 	public String getTopic() {
 		return topic;
-	}
-
-	public int getUserID() {
-		return userID;
 	}
 }

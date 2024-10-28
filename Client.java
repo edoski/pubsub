@@ -34,7 +34,6 @@ public class Client {
 			this.socket = socket;
 			this.in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			this.out = new PrintWriter(socket.getOutputStream(), true);
-			// todo add userID here?
 		} catch (IOException e) {
 			closeEverything();
 		}
@@ -237,6 +236,7 @@ public class Client {
 			return;
 		}
 
+		// If it's not an inspect mode start/end, the message is meant for the client
 		System.out.println(messageFromServer);
 	}
 
@@ -271,6 +271,7 @@ public class Client {
 			if (socket != null && !socket.isClosed()) socket.close();
 			if (in != null) in.close();
 			if (out != null) out.close();
+			backlog.clear(); // In case the client is closed before inspect mode ends (e.g. kicked)
 			System.out.println("--- CLIENT SHUTDOWN ---");
 			System.exit(0);
 		} catch (IOException e) {
