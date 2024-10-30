@@ -16,12 +16,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-// todo: priority
-//  * make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and also show the number of messages
-//  * add a "users" server command to show all connected users and their details (current topic, current role, num. messages sent in current topic)
-//  * add a "user <userID>" server command to show the user's details (current topic, current role, num. messages sent in current topic)
-//  .
-//  * FOR ANY OF THE ABOVE: update server's showHelp() method to include new commands
 
 // todo: secondary
 //  ? make unit tests for all classes
@@ -450,7 +444,6 @@ public class Server {
 		}
 
 		System.out.println("--- SHOW: EXISTING TOPICS ---");
-		StringBuilder topicsInformation = new StringBuilder();
 		ArrayList<String> topics = new ArrayList<>();
 		for (String topic : ClientHandler.topics.keySet()) {
 			if (topics.contains(topic)) continue;
