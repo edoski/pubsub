@@ -269,4 +269,22 @@ public class ClientHandler implements Runnable {
 	public String getTopic() {
 		return topic;
 	}
+
+	public int getUserID() {
+		return userID;
+	}
+
+	public String getRole() {return (isPublisher == null) ?  "Null" :  isPublisher ? "Publisher" : "Subscriber";}
+
+	public int numberOfMessages() {return  (publisherMessages.get(topic) == null) ? 0 : publisherMessages.get(topic).size();}
+
+	public int numberOfMessagesInTopic() {return  (topics.get(topic) == null) ? 0 : topics.get(topic).size();}
+
+	public int numberOfPublishers(String topic) {
+		int count = 0;
+		for (ClientHandler ch : clientHandlers.values()) {
+			if (ch.getRole().equals("Publisher") && ch.getTopic().equals(topic)) count++;
+		}
+		return count;
+	}
 }

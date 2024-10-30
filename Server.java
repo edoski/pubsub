@@ -117,9 +117,50 @@ public class Server {
 				case "kick" -> kickClient(tokens);
 				case "clear" -> clearTopic();
 				case "export" -> export(tokens);
+				case "users" -> showAllUsersInformation();
+				case "user" -> showUserInformation(tokens);
 				default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
 			}
 		}
+	}
+
+	private void showUserInformation(String[] tokens) {
+		if (tokens.length < 2) {
+			System.out.println("> Usage: user <userID>\n");
+			return;
+		}
+
+		if (!tokens[1].matches("\\d+")) {
+			System.out.println("> Invalid user ID.  Enter 'users' to see the list of connected users.\n");
+			return;
+		}
+
+		int userID = Integer.parseInt(tokens[1]);
+		ClientHandler clientHandler = ClientHandler.clientHandlers.get(userID);
+		if (clientHandler == null) {
+			System.out.println("> User ID " + userID + " not found.\n");
+			return;
+		}
+
+		System.out.println("--- SHOW: USER DETAILS ---");
+		System.out.println("> User ID: " + clientHandler.getUserID());
+		System.out.println("> Topic: " + clientHandler.getTopic());
+		System.out.println("> Role: " + clientHandler.getRole());
+		System.out.println("> Messages sent: " + clientHandler.numberOfMessages());
+		System.out.println("--- END OF USER DETAILS ---\n");
+	}
+
+	//o show all connected users and their details current topic, current role, num. messages sent in current topic
+	public void showAllUsersInformation() {
+		System.out.println("--- SHOW: CONNECTED USERS ---\n");
+		StringBuilder usersInformation = new StringBuilder();
+		if(ClientHandler.clientHandlers.isEmpty()) System.out.println("> No users connected.\n");
+		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
+			usersInformation.append("> User ID: ").append(clientHandler.getUserID()).append(" | Topic: ").append(clientHandler.getTopic()).append("\n");
+			usersInformation.append("> Role: ").append(clientHandler.getRole()).append(" | Messages sent: ").append(clientHandler.numberOfMessages()).append("\n\n");
+		}
+		usersInformation.append("--- END OF SHOW USERS ---\n");
+		System.out.println(usersInformation);
 	}
 
 	private void export(String[] tokens) {
@@ -395,6 +436,8 @@ public class Server {
 	 * "show": Displays the list of existing topics.
 	 * Not available during inspect mode.
 	 */
+
+	// make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and also show the number of messages
 	private static void showTopics() {
 		if (isInspecting) {
 			System.out.println("> Command 'show' is not available in inspect mode.\n");
@@ -407,8 +450,28 @@ public class Server {
 		}
 
 		System.out.println("--- SHOW: EXISTING TOPICS ---");
-		for (String topic : ClientHandler.topics.keySet()) System.out.println("> " + topic);
-		System.out.println();
+		StringBuilder topicsInformation = new StringBuilder();
+		ArrayList<String> topics = new ArrayList<>();
+		for (String topic : ClientHandler.topics.keySet()) {
+			if (topics.contains(topic)) continue;
+			topics.add(topic);
+			int publishers = 0;
+			int subscribers = 0;
+			for(ClientHandler clientHandler : ClientHandler.clientHandlers.values()){
+				if(topic.equals(clientHandler.getTopic())){
+					if(clientHandler.getRole().equals("Publisher"))
+						publishers++;
+					else
+						subscribers++;
+				}
+			}
+			System.out.println("> Topic: " + topic);
+			System.out.println("> Publishers: " + publishers);
+			System.out.println("> Subscribers: " + subscribers);
+			System.out.println("> Messages: " + ClientHandler.topics.get(topic).size());
+		}
+		System.out.println("--- END OF SHOW TOPICS ---\n");
+
 	}
 
 	/**
@@ -420,6 +483,8 @@ public class Server {
 		System.out.println("> kick <userID>: Kick a client by ID");
 		System.out.println("> export user <userID>: Export all messages of a user to logs/user_exports");
 		System.out.println("> export topic <topic>: Export all messages of a topic to logs/topic_exports");
+		System.out.println("> users: Show all connected users and their details");
+		System.out.println("> user <userID>: Show details of a specific user");
 		if (isInspecting) {
 			System.out.println("""
 					> listall: List all messages in the topic
