@@ -38,7 +38,7 @@ public class ClientHandler implements Runnable {
 	public ClientHandler(Socket socket, Server server) {
 		this.server = server;
 		this.socket = socket;
-		this.userID = clientCounter.getAndIncrement();
+		this.userID = clientCounter.getAndIncrement(); // Important: Assign a unique ID to the client instead of .size() to avoid clients getting same ID
 		clientHandlers.put(this.userID, this); // Important: Add immediately so both registered and unregistered are handled
 	}
 
@@ -189,7 +189,7 @@ public class ClientHandler implements Runnable {
 	 * @param messageBody the body of the message to broadcast
 	 */
 	private void broadcastMessage(String messageBody) {
-		Message message = new Message(topic, messageBody);
+		Message message = new Message(userID, topic, messageBody);
 		topics.computeIfAbsent(topic, msgs -> new ConcurrentLinkedQueue<>()).offer(message); // Noticed NullPointerException without this
 		publisherMessages.computeIfAbsent(topic, msgs -> new ArrayList<>()).add(message); // Important: Store the message in the client's own list
 		clientHandlers.values().stream()
@@ -277,14 +277,4 @@ public class ClientHandler implements Runnable {
 	public String getRole() {return (isPublisher == null) ?  "Null" :  isPublisher ? "Publisher" : "Subscriber";}
 
 	public int numberOfMessages() {return  (publisherMessages.get(topic) == null) ? 0 : publisherMessages.get(topic).size();}
-
-	public int numberOfMessagesInTopic() {return  (topics.get(topic) == null) ? 0 : topics.get(topic).size();}
-
-	public int numberOfPublishers(String topic) {
-		int count = 0;
-		for (ClientHandler ch : clientHandlers.values()) {
-			if (ch.getRole().equals("Publisher") && ch.getTopic().equals(topic)) count++;
-		}
-		return count;
-	}
 }

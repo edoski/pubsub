@@ -16,38 +16,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-
-// todo: secondary
-//  ? make unit tests for all classes
-//  ? create a Testing class that simulates a client and server interaction
-
-/*todo: firebase
- * IF WE DON'T DO DB WE CAN PUT THIS IN OUR DOC AS A POINT WE CONSIDERED
- * 1. add registration/login feature (username:password)
- * 2. userID becomes username
- * 3. Firebase db collections
- *      Clients {
- *          username1 (created by client at registration): {
- *              password: idem
- *              isPublisher: the role which the user was before disconnecting in previous session || null aka unregistered client if first time client
- *              messages: {
- *                  topic1: list of username1-ONLY messages for topic 1
- *                  topic2: messages list for topic 2
- *                  ...
- *                  topic_m: messages list for topic m
- *              }
- *          },
- *          username2 {}...,
- *          username2 {}...
- *      }
- * .
- *      Messages {
- *          topic1: list of ALL messages for topic 1
- *          topic2: list of ALL messages for topic 2
- *          topic_n: list of ALL messages for topic n
- *      }
- */
-
 /**
  * The Server class manages client connections, handles server commands,
  * and maintains the server's operational state.
@@ -136,19 +104,21 @@ public class Server {
 			return;
 		}
 
-		System.out.println("--- SHOW: USER DETAILS ---");
-		System.out.println("> User ID: " + clientHandler.getUserID());
-		System.out.println("> Topic: " + clientHandler.getTopic());
-		System.out.println("> Role: " + clientHandler.getRole());
-		System.out.println("> Messages sent: " + clientHandler.numberOfMessages());
-		System.out.println("--- END OF USER DETAILS ---\n");
+		String userInformation =
+				"--- SHOW: USER DETAILS ---\n" +
+				"> User ID: " + clientHandler.getUserID() + "\n" +
+				"> Topic: " + clientHandler.getTopic() + "\n" +
+				"> Role: " + clientHandler.getRole() + "\n" +
+				"> Messages sent: " + clientHandler.numberOfMessages() + "\n" +
+				"--- END OF USER DETAILS ---\n";
+		System.out.println(userInformation);
 	}
 
-	//o show all connected users and their details current topic, current role, num. messages sent in current topic
+	// Show all connected users and their details current topic, current role, num. messages sent in current topic
 	public void showAllUsersInformation() {
 		System.out.println("--- SHOW: CONNECTED USERS ---\n");
 		StringBuilder usersInformation = new StringBuilder();
-		if(ClientHandler.clientHandlers.isEmpty()) System.out.println("> No users connected.\n");
+		if (ClientHandler.clientHandlers.isEmpty()) System.out.println("> No users connected.\n");
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
 			usersInformation.append("> User ID: ").append(clientHandler.getUserID()).append(" | Topic: ").append(clientHandler.getTopic()).append("\n");
 			usersInformation.append("> Role: ").append(clientHandler.getRole()).append(" | Messages sent: ").append(clientHandler.numberOfMessages()).append("\n\n");
@@ -166,7 +136,7 @@ public class Server {
 		String exportType = tokens[1];
 		switch (exportType) {
 			case "user" -> exportUser(tokens[2]); // export user <userID>
-			case "topic" -> exportTopic(tokens[2]); // export topic <topic>
+			case "topic" -> exportTopic(String.join("_", Arrays.copyOfRange(tokens, 2, tokens.length))); // export topic <topic>
 			default -> System.out.println("> Invalid export type. Use 'user' or 'topic'.\n");
 		}
 	}
@@ -178,7 +148,7 @@ public class Server {
 		}
 
 		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(topic);
-		if (messages == null || messages.isEmpty()) {
+		if (messages.isEmpty()) {
 			System.out.println("> No messages available for topic '" + topic + "'.\n");
 			return;
 		}
@@ -195,7 +165,14 @@ public class Server {
 			Files.createDirectories(path);
 			try (PrintWriter writer = new PrintWriter(dir + "/" + filename)) {
 				writer.println("--- EXPORTED MESSAGES FOR TOPIC '" + topic + "' ---\n");
-				for (Message msg : messages) writer.println(msg);
+				int user = -1;
+				for (Message msg : messages) {
+					if (!(msg.getUserID() == user)) {
+						user = msg.getUserID();
+						writer.println("> USER: " + user + "\n");
+					}
+					writer.println(msg);
+				}
 				System.out.println("> Messages in topic '" + topic + "' exported to '" + dir + "/" + filename + "'.\n");
 			}
 		} catch (IOException e) {
@@ -216,7 +193,9 @@ public class Server {
 			return;
 		}
 
-		ArrayList<Message> messages = clientHandler.publisherMessages.get(clientHandler.getTopic());
+		ArrayList<Message> messages = new ArrayList<>();
+		for (ArrayList<Message> msgs : clientHandler.publisherMessages.values()) messages.addAll(msgs);
+
 		if (messages.isEmpty()) {
 			System.out.println("> No messages available for user ID " + id + ".\n");
 			return;
@@ -234,7 +213,14 @@ public class Server {
 			Files.createDirectories(path);
 			try (PrintWriter writer = new PrintWriter(dir + "/" + filename)) {
 				writer.println("--- EXPORTED MESSAGES FOR USER ID " + id + " ---\n");
-				for (Message msg : messages) writer.println(msg);
+				String topic = null;
+				for (Message msg : messages) {
+					if (!msg.getTopic().equals(topic)) {
+						topic = msg.getTopic();
+						writer.println("> TOPIC: " + topic + "\n");
+					}
+					writer.println(msg);
+				}
 				System.out.println("> Messages for user ID " + id + " exported to '" + dir + "/" + filename + "'.\n");
 			}
 		} catch (IOException e) {
@@ -268,9 +254,9 @@ public class Server {
 
 		messages.clear();
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
-			if (topic.equals(clientHandler.getTopic())) {
+			if (clientHandler.publisherMessages.containsKey(topic)) {
 				clientHandler.publisherMessages.get(topic).clear();
-				clientHandler.broadcastMessageFromServer("> ALL MESSAGES CLEARED BY SERVER\n");
+				clientHandler.broadcastMessageFromServer("> ALL MESSAGES IN '" + topic + "' CLEARED BY SERVER\n");
 			}
 		}
 		System.out.println("> All messages in topic '" + topic + "' have been cleared.\n");
@@ -443,7 +429,8 @@ public class Server {
 			return;
 		}
 
-		System.out.println("--- SHOW: EXISTING TOPICS ---");
+		StringBuilder showTopics = new StringBuilder();
+		showTopics.append("--- SHOW: EXISTING TOPICS ---\n");
 		ArrayList<String> topics = new ArrayList<>();
 		for (String topic : ClientHandler.topics.keySet()) {
 			if (topics.contains(topic)) continue;
@@ -451,20 +438,18 @@ public class Server {
 			int publishers = 0;
 			int subscribers = 0;
 			for(ClientHandler clientHandler : ClientHandler.clientHandlers.values()){
-				if(topic.equals(clientHandler.getTopic())){
-					if(clientHandler.getRole().equals("Publisher"))
-						publishers++;
-					else
-						subscribers++;
+				if (topic.equals(clientHandler.getTopic())) {
+					if (clientHandler.getRole().equals("Publisher")) publishers++;
+					else subscribers++;
 				}
 			}
-			System.out.println("> Topic: " + topic);
-			System.out.println("> Publishers: " + publishers);
-			System.out.println("> Subscribers: " + subscribers);
-			System.out.println("> Messages: " + ClientHandler.topics.get(topic).size());
+			showTopics.append("> Topic: ").append(topic).append("\n");
+			showTopics.append("> Publishers: ").append(publishers).append("\n");
+			showTopics.append("> Subscribers: ").append(subscribers).append("\n");
+			showTopics.append("> Messages: ").append(ClientHandler.topics.get(topic).size()).append("\n");
 		}
-		System.out.println("--- END OF SHOW TOPICS ---\n");
-
+		showTopics.append("--- END OF SHOW TOPICS ---\n");
+		System.out.println(showTopics);
 	}
 
 	/**
@@ -472,27 +457,27 @@ public class Server {
 	 * Shows different commands based on whether the server is in inspect mode.
 	 */
 	private void showHelp() {
-		System.out.println("--- HELP: AVAILABLE COMMANDS ---");
-		System.out.println("> kick <userID>: Kick a client by ID");
-		System.out.println("> export user <userID>: Export all messages of a user to logs/user_exports");
-		System.out.println("> export topic <topic>: Export all messages of a topic to logs/topic_exports");
-		System.out.println("> users: Show all connected users and their details");
-		System.out.println("> user <userID>: Show details of a specific user");
+		StringBuilder help = new StringBuilder();
+		help.append("--- HELP: AVAILABLE COMMANDS ---\n");
+		help.append("> kick <userID>: Kick a client by ID\n");
+		help.append("> export user <userID>: Export all messages of a user to logs/user_exports\n");
+		help.append("> export topic <topic>: Export all messages of a topic to logs/topic_exports\n");
+		help.append("> users: Show all connected users and their details\n");
+		help.append("> user <userID>: Show details of a specific user\n");
 		if (isInspecting) {
-			System.out.println("""
-					> listall: List all messages in the topic
-					> delete <messageId>: Delete a message by ID
-					> clear: Clear all messages in the topic being inspected
-					> end: Exit interactive mode
-					
-					! N.B. Commands 'quit' & 'inspect' are disabled in interactive mode,
-					\tclient's 'send', 'list', 'listall' are suspended until the mode is exited.
-					""");
+			help.append("> listall: List all messages in the topic\n");
+			help.append("> delete <messageId>: Delete a message by ID\n");
+			help.append("> clear: Clear all messages in the topic being inspected\n");
+			help.append("> end: Exit interactive mode\n\n");
+			help.append("! N.B. Commands 'quit' & 'inspect' are disabled in interactive mode,\n");
+			help.append("\tclient's 'send', 'list', 'listall' are suspended until the mode is exited.\n");
 		} else {
-			System.out.println("> show: Show available topics");
-			System.out.println("> inspect <topic>: Open interactive mode to inspect a topic (list all messages, delete messages, etc.)");
-			System.out.println("> quit: Disconnect from the server\n");
+			help.append("> show: Show available topics\n");
+			help.append("> inspect <topic>: Open interactive mode to inspect a topic (list all messages, delete messages, etc.)\n");
+			help.append("> quit: Disconnect from the server\n");
 		}
+		help.append("--- END OF HELP ---\n");
+		System.out.println(help);
 	}
 
 	public boolean isRunning() {
