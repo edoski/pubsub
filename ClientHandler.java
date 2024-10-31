@@ -274,7 +274,11 @@ public class ClientHandler implements Runnable {
 		return userID;
 	}
 
-	public String getRole() {return (isPublisher == null) ?  "Null" :  isPublisher ? "Publisher" : "Subscriber";}
+	public String getRole() {
+		return (isPublisher == null) ?  "Unregistered" :  isPublisher ? "Publisher" : "Subscriber";
+	}
 
-	public int numberOfMessages() {return  (publisherMessages.get(topic) == null) ? 0 : publisherMessages.get(topic).size();}
+	public int getNumMessagesSent() {
+		return publisherMessages.get(topic) == null ? 0 : publisherMessages.get(topic).size();
+	}
 }

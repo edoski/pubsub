@@ -60,7 +60,7 @@ public class Server {
 	 * Listens for server commands from the console input.
 	 * Allows the server operator to execute commands like inspect, listall, delete, etc.
 	 */
-	private void listenForCommands() {
+	private void processCommand() {
 		Scanner scanner = new Scanner(System.in);
 		while (serverRunning) {
 			String commandLine = scanner.nextLine().trim();
@@ -69,12 +69,12 @@ public class Server {
 			String[] tokens = commandLine.split("\\s+");
 			String command = tokens[0].toLowerCase();
 			switch (command) {
+				case "show" -> showTopics();
 				case "quit" -> shutdownServer();
 				case "inspect" -> startInspectMode(tokens);
+				case "end" -> endInspectMode();
 				case "listall" -> listAllMessagesInTopic();
 				case "delete" -> deleteMessage(tokens);
-				case "end" -> endInspectMode();
-				case "show" -> showTopics();
 				case "help" -> showHelp();
 				case "kick" -> kickClient(tokens);
 				case "clear" -> clearTopic();
@@ -86,207 +86,67 @@ public class Server {
 		}
 	}
 
-	private void showUserInformation(String[] tokens) {
-		if (tokens.length < 2) {
-			System.out.println("> Usage: user <userID>\n");
+	/**
+	 * "show": Displays the list of existing topics.
+	 * Not available during inspect mode.
+	 */
+	private static void showTopics() {
+		if (isInspecting) {
+			System.out.println("> Command 'show' is not available in inspect mode.\n");
 			return;
 		}
 
-		if (!tokens[1].matches("\\d+")) {
-			System.out.println("> Invalid user ID.  Enter 'users' to see the list of connected users.\n");
+		if (ClientHandler.topics.isEmpty()) {
+			System.out.println("> No topics available.\n");
 			return;
 		}
 
-		int userID = Integer.parseInt(tokens[1]);
-		ClientHandler clientHandler = ClientHandler.clientHandlers.get(userID);
-		if (clientHandler == null) {
-			System.out.println("> User ID " + userID + " not found.\n");
-			return;
-		}
-
-		String userInformation =
-				"--- SHOW: USER DETAILS ---\n" +
-				"> User ID: " + clientHandler.getUserID() + "\n" +
-				"> Topic: " + clientHandler.getTopic() + "\n" +
-				"> Role: " + clientHandler.getRole() + "\n" +
-				"> Messages sent: " + clientHandler.numberOfMessages() + "\n" +
-				"--- END OF USER DETAILS ---\n";
-		System.out.println(userInformation);
-	}
-
-	// Show all connected users and their details current topic, current role, num. messages sent in current topic
-	public void showAllUsersInformation() {
-		System.out.println("--- SHOW: CONNECTED USERS ---\n");
-		StringBuilder usersInformation = new StringBuilder();
-		if (ClientHandler.clientHandlers.isEmpty()) System.out.println("> No users connected.\n");
-		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
-			usersInformation.append("> User ID: ").append(clientHandler.getUserID()).append(" | Topic: ").append(clientHandler.getTopic()).append("\n");
-			usersInformation.append("> Role: ").append(clientHandler.getRole()).append(" | Messages sent: ").append(clientHandler.numberOfMessages()).append("\n\n");
-		}
-		usersInformation.append("--- END OF SHOW USERS ---\n");
-		System.out.println(usersInformation);
-	}
-
-	private void export(String[] tokens) {
-		if (tokens.length < 3) {
-			System.out.println("> Usage: export [user <userID> | topic <topic>]\n");
-			return;
-		}
-
-		String exportType = tokens[1];
-		switch (exportType) {
-			case "user" -> exportUser(tokens[2]); // export user <userID>
-			case "topic" -> exportTopic(String.join("_", Arrays.copyOfRange(tokens, 2, tokens.length))); // export topic <topic>
-			default -> System.out.println("> Invalid export type. Use 'user' or 'topic'.\n");
-		}
-	}
-
-	private void exportTopic(String topic) {
-		if (!ClientHandler.topics.containsKey(topic)) {
-			System.out.println("> Topic '" + topic + "' does not exist.\n");
-			return;
-		}
-
-		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(topic);
-		if (messages.isEmpty()) {
-			System.out.println("> No messages available for topic '" + topic + "'.\n");
-			return;
-		}
-
-		// YYYYMMDD_HHMMSS
-		Date date = new Date();
-		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
-		String filename = "export_" + dateFormat.format(date) + "_topic_" + topic + ".txt";
-
-		// Creates dir "logs/topic_exports" if it doesn't exist
-		String dir = "logs/topic_exports";
-		try {
-			Path path = Paths.get(dir);
-			Files.createDirectories(path);
-			try (PrintWriter writer = new PrintWriter(dir + "/" + filename)) {
-				writer.println("--- EXPORTED MESSAGES FOR TOPIC '" + topic + "' ---\n");
-				int user = -1;
-				for (Message msg : messages) {
-					if (!(msg.getUserID() == user)) {
-						user = msg.getUserID();
-						writer.println("> USER: " + user + "\n");
-					}
-					writer.println(msg);
+		StringBuilder showTopics = new StringBuilder();
+		showTopics.append("--- SHOW: EXISTING TOPICS ---\n");
+		ArrayList<String> topics = new ArrayList<>();
+		for (String topic : ClientHandler.topics.keySet()) {
+			if (topics.contains(topic)) continue;
+			topics.add(topic);
+			int publishers = 0;
+			int subscribers = 0;
+			for(ClientHandler clientHandler : ClientHandler.clientHandlers.values()){
+				if (topic.equals(clientHandler.getTopic())) {
+					if (clientHandler.getRole().equals("Publisher")) publishers++;
+					else subscribers++;
 				}
-				System.out.println("> Messages in topic '" + topic + "' exported to '" + dir + "/" + filename + "'.\n");
 			}
-		} catch (IOException e) {
-			System.out.println("> Error exporting messages: " + e.getMessage());
+			showTopics.append("> Topic: ").append(topic).append("\n");
+			showTopics.append("> Publishers: ").append(publishers).append("\n");
+			showTopics.append("> Subscribers: ").append(subscribers).append("\n");
+			showTopics.append("> Messages: ").append(ClientHandler.topics.get(topic).size()).append("\n");
 		}
-	}
-
-	private void exportUser(String userID) {
-		if (!userID.matches("\\d+")) {
-			System.out.println("> Invalid user ID. Enter 'users' to see the list of connected users.\n");
-			return;
-		}
-
-		int id = Integer.parseInt(userID);
-		ClientHandler clientHandler = ClientHandler.clientHandlers.get(id);
-		if (clientHandler == null) {
-			System.out.println("> User ID " + id + " not found.\n");
-			return;
-		}
-
-		ArrayList<Message> messages = new ArrayList<>();
-		for (ArrayList<Message> msgs : clientHandler.publisherMessages.values()) messages.addAll(msgs);
-
-		if (messages.isEmpty()) {
-			System.out.println("> No messages available for user ID " + id + ".\n");
-			return;
-		}
-
-		// YYYYMMDD_HHMMSS
-		Date date = new Date();
-		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
-		String filename = "export_" + dateFormat.format(date) + "_user_" + id + ".txt";
-
-		// Creates dir "logs/user_exports" if it doesn't exist
-		String dir = "logs/user_exports";
-		try {
-			Path path = Paths.get(dir);
-			Files.createDirectories(path);
-			try (PrintWriter writer = new PrintWriter(dir + "/" + filename)) {
-				writer.println("--- EXPORTED MESSAGES FOR USER ID " + id + " ---\n");
-				String topic = null;
-				for (Message msg : messages) {
-					if (!msg.getTopic().equals(topic)) {
-						topic = msg.getTopic();
-						writer.println("> TOPIC: " + topic + "\n");
-					}
-					writer.println(msg);
-				}
-				System.out.println("> Messages for user ID " + id + " exported to '" + dir + "/" + filename + "'.\n");
-			}
-		} catch (IOException e) {
-			System.out.println("> Error exporting messages: " + e.getMessage());
-		}
+		showTopics.append("--- END OF SHOW TOPICS ---\n");
+		System.out.println(showTopics);
 	}
 
 	/**
-	 * "clear": Clears all messages in the topic currently being inspected.
-	 * Notifies clients in the topic about the deletion.
+	 * "quit": Shuts down the server gracefully.
+	 * Disconnects all clients and closes the server socket.
 	 */
-	private void clearTopic() {
-		if (!isInspecting) {
-			System.out.println("> Command 'clear' is only available in inspect mode.\n");
+	private void shutdownServer() {
+		if (isInspecting) {
+			System.out.println("> Cannot shut down server while in inspect mode.\n");
 			return;
 		}
 
-		String topic = currentInspectTopic;
-		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(topic);
-		if (messages == null || messages.isEmpty()) {
-			System.out.println("> No messages available for topic '" + topic + "'.\n");
-			return;
+		serverRunning = false;
+		try {
+			System.out.println("> (PRE-QUIT)  Connected clients: " + ClientHandler.clientHandlers.size());
+			for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) clientHandler.interruptThread();
+			if (!serverSocket.isClosed()) serverSocket.close();
+			pool.shutdownNow();
+			System.out.println("> (POST-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
+		} catch (IOException e) {
+			System.out.println("> Error shutting down server: " + e.getMessage());
 		}
 
-		Scanner scanner = new Scanner(System.in);
-		System.out.print("> Are you sure you want to clear all messages in topic '" + topic + "'? (y/n): ");
-		if (!scanner.nextLine().equalsIgnoreCase("y")) {
-			System.out.println("> Clear operation cancelled.\n");
-			return;
-		}
-
-		messages.clear();
-		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
-			if (clientHandler.publisherMessages.containsKey(topic)) {
-				clientHandler.publisherMessages.get(topic).clear();
-				clientHandler.broadcastMessageFromServer("> ALL MESSAGES IN '" + topic + "' CLEARED BY SERVER\n");
-			}
-		}
-		System.out.println("> All messages in topic '" + topic + "' have been cleared.\n");
-	}
-
-	/**
-	 * "kick": Kicks a client by their user ID.
-	 * The client is disconnected from the server and their thread is interrupted.
-	 *
-	 * @param tokens the command tokens containing the user ID to kick
-	 */
-	private void kickClient(String[] tokens) {
-		if (tokens.length < 2) {
-			System.out.println("> Usage: kick <userID>\n");
-			return;
-		}
-
-		if (!tokens[1].matches("\\d+")) {
-			System.out.println("> Invalid user ID. Enter 'users' to see the list of connected users.\n");
-			return;
-		}
-
-		int userID = Integer.parseInt(tokens[1]);
-		ClientHandler clientHandler = ClientHandler.clientHandlers.get(userID);
-		if (clientHandler == null) {
-			System.out.println("> User ID " + userID + " not found.\n");
-			return;
-		}
-
-		clientHandler.interruptThread(true);
+		System.out.println("--- SERVER SHUTDOWN ---");
+		System.exit(0);
 	}
 
 	/**
@@ -404,52 +264,19 @@ public class Server {
 		} else System.out.println("> (ERROR) Message with ID " + messageID + " not found.\n");
 	}
 
+	/**
+	 * Deletes a message with the specified message ID from a client's message list.
+	 * Helper method for the "delete" command.
+	 *
+	 * @param msgID the message ID to delete
+	 * @return true if the message was deleted, false otherwise
+	 */
 	public boolean deleteFromClient(int msgID) {
 		for (ClientHandler clientHandler: ClientHandler.clientHandlers.values()) {
 			ArrayList<Message> messages = clientHandler.publisherMessages.get(currentInspectTopic);
 			if (messages.removeIf(msg -> msg.getId() == msgID)) return true;
 		}
 		return false;
-	}
-
-	/**
-	 * "show": Displays the list of existing topics.
-	 * Not available during inspect mode.
-	 */
-
-	// make "show" more detailed by adding the number of connected publishers and subscribers to each topic, and also show the number of messages
-	private static void showTopics() {
-		if (isInspecting) {
-			System.out.println("> Command 'show' is not available in inspect mode.\n");
-			return;
-		}
-
-		if (ClientHandler.topics.isEmpty()) {
-			System.out.println("> No topics available.\n");
-			return;
-		}
-
-		StringBuilder showTopics = new StringBuilder();
-		showTopics.append("--- SHOW: EXISTING TOPICS ---\n");
-		ArrayList<String> topics = new ArrayList<>();
-		for (String topic : ClientHandler.topics.keySet()) {
-			if (topics.contains(topic)) continue;
-			topics.add(topic);
-			int publishers = 0;
-			int subscribers = 0;
-			for(ClientHandler clientHandler : ClientHandler.clientHandlers.values()){
-				if (topic.equals(clientHandler.getTopic())) {
-					if (clientHandler.getRole().equals("Publisher")) publishers++;
-					else subscribers++;
-				}
-			}
-			showTopics.append("> Topic: ").append(topic).append("\n");
-			showTopics.append("> Publishers: ").append(publishers).append("\n");
-			showTopics.append("> Subscribers: ").append(subscribers).append("\n");
-			showTopics.append("> Messages: ").append(ClientHandler.topics.get(topic).size()).append("\n");
-		}
-		showTopics.append("--- END OF SHOW TOPICS ---\n");
-		System.out.println(showTopics);
 	}
 
 	/**
@@ -480,33 +307,252 @@ public class Server {
 		System.out.println(help);
 	}
 
-	public boolean isRunning() {
-		return serverRunning;
-	}
-
 	/**
-	 * "quit": Shuts down the server gracefully.
-	 * Disconnects all clients and closes the server socket.
+	 * "kick": Kicks a client by their user ID.
+	 * The client is disconnected from the server and their thread is interrupted.
+	 *
+	 * @param tokens the command tokens containing the user ID to kick
 	 */
-	private void shutdownServer() {
-		if (isInspecting) {
-			System.out.println("> Cannot shut down server while in inspect mode.\n");
+	private void kickClient(String[] tokens) {
+		if (tokens.length < 2) {
+			System.out.println("> Usage: kick <userID>\n");
 			return;
 		}
 
-		serverRunning = false;
-		try {
-			System.out.println("> (PRE-QUIT)  Connected clients: " + ClientHandler.clientHandlers.size());
-			for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) clientHandler.interruptThread();
-			if (!serverSocket.isClosed()) serverSocket.close();
-			pool.shutdownNow();
-			System.out.println("> (POST-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
-		} catch (IOException e) {
-			System.out.println("> Error shutting down server: " + e.getMessage());
+		if (!tokens[1].matches("\\d+")) {
+			System.out.println("> Invalid user ID. Enter 'users' to see the list of connected users.\n");
+			return;
 		}
 
-		System.out.println("--- SERVER SHUTDOWN ---");
-		System.exit(0);
+		int userID = Integer.parseInt(tokens[1]);
+		ClientHandler clientHandler = ClientHandler.clientHandlers.get(userID);
+		if (clientHandler == null) {
+			System.out.println("> User ID " + userID + " not found.\n");
+			return;
+		}
+
+		clientHandler.interruptThread(true);
+	}
+
+	/**
+	 * "clear": Clears all messages in the topic currently being inspected.
+	 * Notifies clients in the topic about the deletion.
+	 */
+	private void clearTopic() {
+		if (!isInspecting) {
+			System.out.println("> Command 'clear' is only available in inspect mode.\n");
+			return;
+		}
+
+		String topic = currentInspectTopic;
+		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(topic);
+		if (messages == null || messages.isEmpty()) {
+			System.out.println("> No messages available for topic '" + topic + "'.\n");
+			return;
+		}
+
+		Scanner scanner = new Scanner(System.in);
+		System.out.print("> Are you sure you want to clear all messages in topic '" + topic + "'? (y/n): ");
+		if (!scanner.nextLine().equalsIgnoreCase("y")) {
+			System.out.println("> Clear operation cancelled.\n");
+			return;
+		}
+
+		messages.clear();
+		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
+			if (clientHandler.publisherMessages.containsKey(topic)) {
+				clientHandler.publisherMessages.get(topic).clear();
+				clientHandler.broadcastMessageFromServer("> ALL MESSAGES IN '" + topic + "' CLEARED BY SERVER\n");
+			}
+		}
+		System.out.println("> All messages in topic '" + topic + "' have been cleared.\n");
+	}
+
+	/**
+	 * "export": Exports messages for a user or topic to a text file.
+	 * The exported file is saved in the logs/user_exports or logs/topic_exports directory,
+	 * depending on the specified export type (token[1]).
+	 *
+	 * @param tokens the command tokens containing the export type and user ID or topic
+	 */
+	private void export(String[] tokens) {
+		if (tokens.length < 3) {
+			System.out.println("> Usage: export [user <userID> | topic <topic>]\n");
+			return;
+		}
+
+		String exportType = tokens[1];
+		switch (exportType) {
+			case "user" -> exportUser(tokens[2]); // export user <userID>
+			case "topic" -> exportTopic(String.join("_", Arrays.copyOfRange(tokens, 2, tokens.length))); // export topic <topic>
+			default -> System.out.println("> Invalid export type. Use 'user' or 'topic'.\n");
+		}
+	}
+
+	/**
+	 * Exports all messages for a specific topic to a text file in the logs/topic_exports directory.
+	 *
+	 * @param topic the topic to export messages for
+	 */
+	private void exportTopic(String topic) {
+		if (!ClientHandler.topics.containsKey(topic)) {
+			System.out.println("> Topic '" + topic + "' does not exist.\n");
+			return;
+		}
+
+		ConcurrentLinkedQueue<Message> messages = ClientHandler.topics.get(topic);
+		if (messages.isEmpty()) {
+			System.out.println("> No messages available for topic '" + topic + "'.\n");
+			return;
+		}
+
+		// YYYYMMDD_HHMMSS
+		Date date = new Date();
+		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+		String filename = "export_" + dateFormat.format(date) + "_topic_" + topic + ".txt";
+
+		// Creates dir "logs/topic_exports" if it doesn't exist
+		String dir = "logs/topic_exports";
+		try {
+			Path path = Paths.get(dir);
+			Files.createDirectories(path);
+			try (PrintWriter writer = new PrintWriter(dir + "/" + filename)) {
+				writer.println("--- EXPORTED MESSAGES FOR TOPIC '" + topic + "' ---\n");
+				int user = -1;
+				for (Message msg : messages) {
+					if (!(msg.getUserID() == user)) {
+						user = msg.getUserID();
+						writer.println("> USER: " + user + "\n");
+					}
+					writer.println(msg);
+				}
+				System.out.println("> Messages in topic '" + topic + "' exported to '" + dir + "/" + filename + "'.\n");
+			}
+		} catch (IOException e) {
+			System.out.println("> Error exporting messages: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Exports all messages for a specific user to a text file in the logs/user_exports directory.
+	 *
+	 * @param userID the user ID to export messages for
+	 */
+	private void exportUser(String userID) {
+		if (!userID.matches("\\d+")) {
+			System.out.println("> Invalid user ID. Enter 'users' to see the list of connected users.\n");
+			return;
+		}
+
+		int id = Integer.parseInt(userID);
+		ClientHandler clientHandler = ClientHandler.clientHandlers.get(id);
+		if (clientHandler == null) {
+			System.out.println("> User ID " + id + " not found.\n");
+			return;
+		}
+
+		ArrayList<Message> messages = new ArrayList<>();
+		for (ArrayList<Message> msgs : clientHandler.publisherMessages.values()) messages.addAll(msgs);
+
+		if (messages.isEmpty()) {
+			System.out.println("> No messages available for user ID " + id + ".\n");
+			return;
+		}
+
+		// YYYYMMDD_HHMMSS
+		Date date = new Date();
+		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
+		String filename = "export_" + dateFormat.format(date) + "_user_" + id + ".txt";
+
+		// Creates dir "logs/user_exports" if it doesn't exist
+		String dir = "logs/user_exports";
+		try {
+			Path path = Paths.get(dir);
+			Files.createDirectories(path);
+			try (PrintWriter writer = new PrintWriter(dir + "/" + filename)) {
+				writer.println("--- EXPORTED MESSAGES FOR USER ID " + id + " ---\n");
+				String topic = null;
+				for (Message msg : messages) {
+					if (!msg.getTopic().equals(topic)) {
+						topic = msg.getTopic();
+						writer.println("> TOPIC: " + topic + "\n");
+					}
+					writer.println(msg);
+				}
+				System.out.println("> Messages for user ID " + id + " exported to '" + dir + "/" + filename + "'.\n");
+			}
+		} catch (IOException e) {
+			System.out.println("> Error exporting messages: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * "users": Show all connected users and their details current topic, current role,num. messages sent in current topic
+	 */
+	public void showAllUsersInformation() {
+		if (ClientHandler.clientHandlers.isEmpty()) {
+			System.out.println("> No users connected.\n");
+			return;
+		}
+
+		StringBuilder usersInformation = new StringBuilder();
+		usersInformation.append("--- SHOW: ALL USERS ---\n");
+		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
+			showUserInformation(clientHandler);
+		}
+		usersInformation.append("--- END OF ALL USERS ---\n");
+		System.out.println(usersInformation);
+	}
+
+	/**
+	 * "user": Show user information for a specific user by their user ID.
+	 *
+	 * @param tokens the command tokens containing the user ID
+	 */
+	private void showUserInformation(String[] tokens) {
+		if (tokens.length < 2) {
+			System.out.println("> Usage: user <userID>\n");
+			return;
+		}
+
+		if (!tokens[1].matches("\\d+")) {
+			System.out.println("> Invalid user ID.  Enter 'users' to see the list of connected users.\n");
+			return;
+		}
+
+		int userID = Integer.parseInt(tokens[1]);
+		ClientHandler clientHandler = ClientHandler.clientHandlers.get(userID);
+		if (clientHandler == null) {
+			System.out.println("> User ID " + userID + " not found.\n");
+			return;
+		}
+
+		String userInformation =
+				"--- SHOW: USER ID " + clientHandler.getUserID() + " ---\n" +
+				"> CURRENT TOPIC: " + clientHandler.getTopic() + "\n" +
+				"> CURRENT ROLE:  " + clientHandler.getRole() + "\n" +
+				"> MESSAGES SENT: " + clientHandler.getNumMessagesSent() + "\n" +
+				"--- END OF USER DETAILS ---\n";
+		System.out.println(userInformation);
+	}
+
+	/**
+	 * Overloaded method to show user information for a specific client handler.
+	 * Helper method for the "users" command.
+	 *
+	 * @param clientHandler the client handler to show information for
+	 */
+	private void showUserInformation(ClientHandler clientHandler) {
+		String userInformation =
+				"--- USER ID " + clientHandler.getUserID() + " ---\n" +
+				"> CURRENT TOPIC: " + clientHandler.getTopic() + "\n" +
+				"> CURRENT ROLE:  " + clientHandler.getRole() + "\n" +
+				"> MESSAGES SENT: " + clientHandler.getNumMessagesSent() + "\n";
+		System.out.println(userInformation);
+	}
+
+	public boolean isRunning() {
+		return serverRunning;
 	}
 
 	/**
@@ -536,7 +582,7 @@ public class Server {
 			// When start() is called on the thread, server.startServer() is called within the thread
 			Thread serverThread = new Thread(server::startServer);
 			serverThread.start();
-			server.listenForCommands();
+			server.processCommand();
 		} catch (IOException e) {
 			System.out.println("> Error starting server: " + e.getMessage());
 		}
