@@ -64,10 +64,12 @@ public class Server {
 		Scanner scanner = new Scanner(System.in);
 		while (serverRunning) {
 			String commandLine = scanner.nextLine().trim();
-			// If we try to process and empty command, continue skips the rest of the loop and goes to the next iteration
+			// Empty commands are ignored
 			if (commandLine.isEmpty()) continue;
+			// Otherwise, command line split into tokens and processed
 			String[] tokens = commandLine.split("\\s+");
 			String command = tokens[0].toLowerCase();
+
 			switch (command) {
 				case "show" -> showTopics();
 				case "quit" -> shutdownServer();
@@ -97,31 +99,31 @@ public class Server {
 		}
 
 		if (ClientHandler.topics.isEmpty()) {
-			System.out.println("> No topics available.\n");
+			System.out.println("> No existingTopics available.\n");
 			return;
 		}
 
-		StringBuilder showTopics = new StringBuilder();
-		showTopics.append("--- SHOW: EXISTING TOPICS ---\n");
-		ArrayList<String> topics = new ArrayList<>();
+		StringBuilder showTopicsOutput = new StringBuilder();
+		showTopicsOutput.append("--- SHOW: EXISTING TOPICS ---\n");
+		ArrayList<String> existingTopics = new ArrayList<>();
 		for (String topic : ClientHandler.topics.keySet()) {
-			if (topics.contains(topic)) continue;
-			topics.add(topic);
-			int publishers = 0;
-			int subscribers = 0;
-			for(ClientHandler clientHandler : ClientHandler.clientHandlers.values()){
+			if (existingTopics.contains(topic)) continue;
+			existingTopics.add(topic);
+			int publishers = 0, subscribers = 0;
+			for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()){
 				if (topic.equals(clientHandler.getTopic())) {
-					if (clientHandler.getRole().equals("Publisher")) publishers++;
+					boolean isPublisher = clientHandler.getRole().equals("Publisher");
+					if (isPublisher) publishers++;
 					else subscribers++;
 				}
 			}
-			showTopics.append("> Topic: ").append(topic).append("\n");
-			showTopics.append("> Publishers: ").append(publishers).append("\n");
-			showTopics.append("> Subscribers: ").append(subscribers).append("\n");
-			showTopics.append("> Messages: ").append(ClientHandler.topics.get(topic).size()).append("\n");
+			showTopicsOutput.append("\n--- TOPIC: ").append(topic).append("\n");
+			showTopicsOutput.append("> PUB: ").append(publishers).append("\n");
+			showTopicsOutput.append("> SUB: ").append(subscribers).append("\n");
+			showTopicsOutput.append("> MSG: ").append(ClientHandler.topics.get(topic).size()).append("\n");
 		}
-		showTopics.append("--- END OF SHOW TOPICS ---\n");
-		System.out.println(showTopics);
+		showTopicsOutput.append("\n--- END OF TOPIC LIST ---\n");
+		System.out.println(showTopicsOutput);
 	}
 
 	/**
