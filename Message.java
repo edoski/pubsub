@@ -35,22 +35,16 @@ public class Message {
 	 */
 	@Override
 	public String toString() {
-		return    "--------------------------------------------------------------------------------\n"
-				+ "USER-" + userID + " @ " + dateFormat.format(timestamp) + "\n"
-				+ "[ID " + messageID + " | TOPIC '"  + topic + "']\n"
-				+ "BODY: " + message + "\n"
-				+ "--------------------------------------------------------------------------------\n";
+		return "--------------------------------------------------------------------------------\n"
+		    + "USER-" + userID + " @ " + dateFormat.format(timestamp) + "\n"
+		    + "[ID " + messageID + " | TOPIC '" + topic + "']\n"
+		    + "BODY: " + message + "\n"
+		    + "--------------------------------------------------------------------------------\n";
 	}
 
-	public int getId() {
-		return messageID;
-	}
+	public int getId() { return messageID; }
 
-	public String getTopic() {
-		return topic;
-	}
+	public String getTopic() { return topic; }
 
-	public int getUserID() {
-		return userID;
-	}
+	public int getUserID() { return userID; }
 }

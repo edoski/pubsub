@@ -44,20 +44,20 @@ public class Client {
 	 * Handles user input and sends commands to the server.
 	 */
 	private void start() {
-        System.out.println(
-                "--- CONNECTED TO SERVER ON PORT " + socket.getPort() + " ---\n" +
-                "> Enter 'help' for a list of available commands.\n"
-        );
-        receiveMessage(); // Start the receiveMessage thread
+		System.out.println("--- CONNECTED TO SERVER ON PORT " + socket.getPort() + " ---\n"
+		                   + "> Enter 'help' for a list of available commands.\n");
+		receiveMessage(); // Start the receiveMessage thread
 
 		// Use the main thread for input handling
-        try (Scanner scanner = new Scanner(System.in)) {
-            while (running) processCommand(scanner.nextLine());
-        } catch (Exception e) {
+		try (Scanner scanner = new Scanner(System.in)) {
+			while (running) {
+				processCommand(scanner.nextLine());
+			}
+		} catch (Exception e) {
 			System.out.println("> Error reading from console: " + e.getMessage());
 			closeEverything();
-        }
-    }
+		}
+	}
 
 	/**
 	 * Starts a new thread to listen for messages from the server.
@@ -68,10 +68,14 @@ public class Client {
 			while (running) {
 				try {
 					String messageFromServer = in.readLine();
-					if (messageFromServer == null) closeEverything();
+					if (messageFromServer == null) {
+						closeEverything();
+					}
 					handleMessageFromServer(messageFromServer);
 				} catch (IOException e) {
-					if (!running) break;
+					if (!running) {
+						break;
+					}
 					System.out.println("> Connection lost: " + e.getMessage());
 					closeEverything();
 				}
@@ -79,18 +83,19 @@ public class Client {
 		}).start();
 	}
 
-	 /**
-     * Processes the user's input command.
-     * Sends commands to the server or handles them locally as needed.
-     *
-     * @param inputLine the user's input command
-     */
+	/**
+	 * Processes the user's input command.
+	 * Sends commands to the server or handles them locally as needed.
+	 *
+	 * @param inputLine the user's input command
+	 */
 	private void processCommand(String inputLine) {
-		if (inputLine.isEmpty()) return;
+		if (inputLine.isEmpty()) {
+			return;
+		}
 		// Sanitize input, split by whitespace
 		String[] tokens = inputLine.trim().split("\\s+");
 		String command = tokens[0].toLowerCase();
-
 
 		// If the server is inspecting, verify & queue the command for later execution
 		if (isServerInspecting && disabledWhenInspecting.contains(command)) {
@@ -98,8 +103,8 @@ public class Client {
 				System.out.println("> You cannot use the command '" + command + "' as a subscriber.\n");
 			} else {
 				System.out.println(command.equals("listall")
-					? "> Command '" + inputLine + "' will execute last (to avoid data inconsistencies) when Inspect mode is ended.\n"
-					: "> Command '" + inputLine + "' has been queued and will execute when Inspect mode is ended.\n");
+				                       ? "> Command '" + inputLine + "' will execute last (to avoid inconsistencies) when Inspect mode is ended.\n"
+				                       : "> Command '" + inputLine + "' has been queued and will execute when Inspect mode is ended.\n");
 				backlog.add(inputLine);
 			}
 			return;
@@ -108,17 +113,17 @@ public class Client {
 		// Commands that use out.println() send a request to the client handler to fulfill the command
 		// The rest of the commands are handled entirely or partially locally
 		switch (command) {
-			case "help" -> showHelp();
-			case "show" -> out.println("show");
-			case "send" -> handleSendCommand(tokens);
-			case "list" -> out.println("list");
-			case "listall" -> out.println("listall");
-			case "quit" -> {
-				out.println("quit");
-				closeEverything();
-			}
-			case "publish", "subscribe" -> handleRegistration(tokens);
-			default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
+		case "help" -> showHelp();
+		case "show" -> out.println("show");
+		case "send" -> handleSendCommand(tokens);
+		case "list" -> out.println("list");
+		case "listall" -> out.println("listall");
+		case "quit" -> {
+			out.println("quit");
+			closeEverything();
+		}
+		case "publish", "subscribe" -> handleRegistration(tokens);
+		default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
 		}
 	}
 
@@ -132,10 +137,8 @@ public class Client {
 			System.out.println("> [publish | subscribe] <topic>: Register as publisher (read-write) or subscriber (read-only) for <topic>");
 		} else {
 			if (isPublisher) { // Only publishers can use these commands
-				System.out.println(
-						(isServerInspecting ? "* " : "") + "> send <message>: Send a message to the server\n" +
-						(isServerInspecting ? "* " : "") + "> list: List the messages you have sent in the topic"
-				);
+				System.out.println((isServerInspecting ? "* " : "") + "> send <message>: Send a message to the server\n" +
+				                   (isServerInspecting ? "* " : "") + "> list: List the messages you have sent in the topic");
 			}
 			// Only registered clients (both publishers & subscribers) can use this command
 			System.out.println((isServerInspecting ? "* " : "") + "> listall: List all messages in the topic");
@@ -144,12 +147,8 @@ public class Client {
 		System.out.println((isServerInspecting ? "  " : "") + "> show: Show available topics");
 		System.out.println((isServerInspecting ? "  " : "") + "> quit: Disconnect from the server\n");
 		if (isServerInspecting) {
-			System.out.println(
-					"""
-					* Commands marked with an asterisk (*) are disabled during Inspect mode.
-					! N.B. Any usage of (*) will be queued and will execute once Inspect mode is ended.
-					"""
-			);
+			System.out.println("* Commands marked with an asterisk(*) are disabled during Inspect mode.\n"
+			                   + "Any usage of these commands will be queued and will execute once Inspect mode is ended.\n");
 		}
 	}
 
@@ -161,9 +160,8 @@ public class Client {
 	 */
 	private void handleSendCommand(String[] tokens) {
 		if (isPublisher == null || !isPublisher) {
-			System.out.println(isPublisher == null
-					? "> You need to register as a publisher first.\n"
-					: "> You are registered as a subscriber. You cannot send messages.\n");
+			System.out.println(isPublisher == null ? "> You need to register as a publisher first.\n"
+			                                       : "> You are registered as a subscriber. You cannot send messages.\n");
 			return;
 		}
 
@@ -195,15 +193,13 @@ public class Client {
 
 			// Check if the client is already registered as a publisher or subscriber for the same topic
 			if (isPublisher == newRole.equals("publish") && topic.equals(newTopic)) {
-				System.out.println("> You are already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n");
+				System.out.println("> You are already a '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n");
 				return;
 			}
 
 			Scanner scanner = new Scanner(System.in);
-			System.out.print(
-					"> You have already registered as '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n" +
-					"> Do you want to change your role and topic? (y/n): "
-			);
+			System.out.print("> You are currently a '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n"
+			                 + "> Do you want to change your role and topic? (y/n): ");
 			String response = scanner.nextLine().toLowerCase();
 			if (!response.equalsIgnoreCase("y") && !response.equalsIgnoreCase("yes")) {
 				System.out.println("> OK. Registration unchanged.\n");
@@ -217,7 +213,7 @@ public class Client {
 		topic = String.join("_", Arrays.copyOfRange(tokens, 1, tokens.length)); // "example topic" -> "example_topic"
 
 		// Send registration command to the server to update the client's role and topic server-side
-		//token 0 is the role, token 1 is the topic --> "publish football"
+		// token 0 is the role, token 1 is the topic --> "publish football"
 		out.println(String.join(" ", tokens));
 	}
 
@@ -232,7 +228,9 @@ public class Client {
 
 		if (tokens[0].equals("IS_SERVER_INSPECTING")) {
 			isServerInspecting = Boolean.parseBoolean(tokens[1]);
-			if (!isServerInspecting) executeBacklogCommands();
+			if (!isServerInspecting) {
+				executeBacklogCommands();
+			}
 			return;
 		}
 
@@ -245,19 +243,29 @@ public class Client {
 	 * Commands are executed in order, with 'list' and 'listall' commands executed last.
 	 */
 	private void executeBacklogCommands() {
-		if (backlog.isEmpty()) return;
+		if (backlog.isEmpty()) {
+			return;
+		}
 		synchronized (backlog) {
 			backlog.sort((a, b) -> { // Sort "list" and "listall" commands to be executed last to avoid interleaving
-				if (a.startsWith("list") && !b.startsWith("list")) return 1;
-				if (!a.startsWith("list") && b.startsWith("list")) return -1;
+				if (a.startsWith("list") && !b.startsWith("list")) {
+					return 1;
+				}
+				if (!a.startsWith("list") && b.startsWith("list")) {
+					return -1;
+				}
 				return 0;
 			});
 
 			System.out.println("--- COMMANDS TO BE EXECUTED ---");
-			for (String cmd : backlog) System.out.println("> " + (backlog.indexOf(cmd) + 1) + ": " + cmd);
+			for (String cmd : backlog) {
+				System.out.println("> " + (backlog.indexOf(cmd) + 1) + ": " + cmd);
+			}
 			System.out.println();
 
-			for (String cmd : backlog) processCommand(cmd);
+			for (String cmd : backlog) {
+				processCommand(cmd);
+			}
 			backlog.clear();
 		}
 	}
@@ -268,9 +276,15 @@ public class Client {
 	private void closeEverything() {
 		running = false;
 		try {
-			if (socket != null && !socket.isClosed()) socket.close();
-			if (in != null) in.close();
-			if (out != null) out.close();
+			if (socket != null && !socket.isClosed()) {
+				socket.close();
+			}
+			if (in != null) {
+				in.close();
+			}
+			if (out != null) {
+				out.close();
+			}
 			backlog.clear(); // In case the client is closed before inspect mode ends (e.g. kicked)
 			System.out.println("--- CLIENT SHUTDOWN ---");
 			System.exit(0);

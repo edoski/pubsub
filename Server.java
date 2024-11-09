@@ -28,9 +28,7 @@ public class Server {
 	private static boolean isInspecting = false;
 	private String currentInspectTopic = null;
 
-	public Server(ServerSocket serverSocket) {
-		this.serverSocket = serverSocket;
-	}
+	public Server(ServerSocket serverSocket) { this.serverSocket = serverSocket; }
 
 	/**
 	 * Starts the server to accept client connections and handle them using ClientHandler.
@@ -46,7 +44,9 @@ public class Server {
 					ClientHandler clientHandler = new ClientHandler(socket, this);
 					pool.execute(clientHandler);
 				} catch (SocketTimeoutException | SocketException e) {
-					if (!serverRunning) break;
+					if (!serverRunning) {
+						break;
+					}
 				}
 			}
 		} catch (IOException e) {
@@ -65,25 +65,27 @@ public class Server {
 		while (serverRunning) {
 			String commandLine = scanner.nextLine().trim();
 			// Empty commands are ignored
-			if (commandLine.isEmpty()) continue;
+			if (commandLine.isEmpty()) {
+				continue;
+			}
 			// Otherwise, command line split into tokens and processed
 			String[] tokens = commandLine.split("\\s+");
 			String command = tokens[0].toLowerCase();
 
 			switch (command) {
-				case "show" -> showTopics();
-				case "quit" -> shutdownServer();
-				case "inspect" -> startInspectMode(tokens);
-				case "end" -> endInspectMode();
-				case "listall" -> listAllMessagesInTopic();
-				case "delete" -> deleteMessage(tokens);
-				case "help" -> showHelp();
-				case "kick" -> kickClient(tokens);
-				case "clear" -> clearTopic();
-				case "export" -> export(tokens);
-				case "users" -> showAllUsersInformation();
-				case "user" -> showUserInformation(tokens);
-				default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
+			case "show" -> showTopics();
+			case "quit" -> shutdownServer();
+			case "inspect" -> startInspectMode(tokens);
+			case "end" -> endInspectMode();
+			case "listall" -> listAllMessagesInTopic();
+			case "delete" -> deleteMessage(tokens);
+			case "help" -> showHelp();
+			case "kick" -> kickClient(tokens);
+			case "clear" -> clearTopic();
+			case "export" -> export(tokens);
+			case "users" -> showAllUsersInformation();
+			case "user" -> showUserInformation(tokens);
+			default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
 			}
 		}
 	}
@@ -107,14 +109,19 @@ public class Server {
 		showTopicsOutput.append("--- SHOW: EXISTING TOPICS ---\n");
 		ArrayList<String> existingTopics = new ArrayList<>();
 		for (String topic : ClientHandler.topics.keySet()) {
-			if (existingTopics.contains(topic)) continue;
+			if (existingTopics.contains(topic)) {
+				continue;
+			}
 			existingTopics.add(topic);
 			int publishers = 0, subscribers = 0;
-			for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()){
+			for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
 				if (topic.equals(clientHandler.getTopic())) {
 					boolean isPublisher = clientHandler.getRole().equals("Publisher");
-					if (isPublisher) publishers++;
-					else subscribers++;
+					if (isPublisher) {
+						publishers++;
+					} else {
+						subscribers++;
+					}
 				}
 			}
 			showTopicsOutput.append("\n--- TOPIC: ").append(topic).append("\n");
@@ -139,8 +146,12 @@ public class Server {
 		serverRunning = false;
 		try {
 			System.out.println("> (PRE-QUIT)  Connected clients: " + ClientHandler.clientHandlers.size());
-			for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) clientHandler.interruptThread();
-			if (!serverSocket.isClosed()) serverSocket.close();
+			for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
+				clientHandler.interruptThread();
+			}
+			if (!serverSocket.isClosed()) {
+				serverSocket.close();
+			}
 			pool.shutdownNow();
 			System.out.println("> (POST-QUIT) Connected clients: " + ClientHandler.clientHandlers.size());
 		} catch (IOException e) {
@@ -225,7 +236,9 @@ public class Server {
 			return;
 		}
 		System.out.println("--- LISTALL: " + messages.size() + " MESSAGES IN '" + currentInspectTopic + "' ---\n");
-		for (Message m : messages) System.out.println(m);
+		for (Message m : messages) {
+			System.out.println(m);
+		}
 		System.out.println("--- LISTALL: END OF MESSAGES IN '" + currentInspectTopic + "' ---\n");
 	}
 
@@ -263,7 +276,9 @@ public class Server {
 					clientHandler.broadcastMessageFromServer("> MESSAGE (ID " + messageID + ") DELETED BY SERVER");
 				}
 			}
-		} else System.out.println("> (ERROR) Message with ID " + messageID + " not found.\n");
+		} else {
+			System.out.println("> (ERROR) Message with ID " + messageID + " not found.\n");
+		}
 	}
 
 	/**
@@ -274,9 +289,11 @@ public class Server {
 	 * @return true if the message was deleted, false otherwise
 	 */
 	public boolean deleteFromClient(int msgID) {
-		for (ClientHandler clientHandler: ClientHandler.clientHandlers.values()) {
+		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
 			ArrayList<Message> messages = clientHandler.publisherMessages.get(currentInspectTopic);
-			if (messages.removeIf(msg -> msg.getId() == msgID)) return true;
+			if (messages.removeIf(msg -> msg.getId() == msgID)) {
+				return true;
+			}
 		}
 		return false;
 	}
@@ -385,9 +402,9 @@ public class Server {
 
 		String exportType = tokens[1];
 		switch (exportType) {
-			case "user" -> exportUser(tokens[2]); // export user <userID>
-			case "topic" -> exportTopic(String.join("_", Arrays.copyOfRange(tokens, 2, tokens.length))); // export topic <topic>
-			default -> System.out.println("> Invalid export type. Use 'user' or 'topic'.\n");
+		case "user" -> exportUser(tokens[2]);                                                        // export user <userID>
+		case "topic" -> exportTopic(String.join("_", Arrays.copyOfRange(tokens, 2, tokens.length))); // export topic <topic>
+		default -> System.out.println("> Invalid export type. Use 'user' or 'topic'.\n");
 		}
 	}
 
@@ -454,7 +471,9 @@ public class Server {
 		}
 
 		ArrayList<Message> messages = new ArrayList<>();
-		for (ArrayList<Message> msgs : clientHandler.publisherMessages.values()) messages.addAll(msgs);
+		for (ArrayList<Message> msgs : clientHandler.publisherMessages.values()) {
+			messages.addAll(msgs);
+		}
 
 		if (messages.isEmpty()) {
 			System.out.println("> No messages available for user ID " + id + ".\n");
@@ -498,9 +517,9 @@ public class Server {
 		}
 
 		StringBuilder usersInformation = new StringBuilder();
-		usersInformation.append("--- SHOW: ALL USERS ---\n");
+		usersInformation.append("--- SHOW: ALL USERS ---\n\n");
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
-			showUserInformation(clientHandler);
+			usersInformation.append(showUserInformation(clientHandler)).append("\n");
 		}
 		usersInformation.append("--- END OF ALL USERS ---\n");
 		System.out.println(usersInformation);
@@ -529,12 +548,11 @@ public class Server {
 			return;
 		}
 
-		String userInformation =
-				"--- SHOW: USER ID " + clientHandler.getUserID() + " ---\n" +
-				"> CURRENT TOPIC: " + clientHandler.getTopic() + "\n" +
-				"> CURRENT ROLE:  " + clientHandler.getRole() + "\n" +
-				"> MESSAGES SENT: " + clientHandler.getNumMessagesSent() + "\n" +
-				"--- END OF USER DETAILS ---\n";
+		String userInformation = "--- SHOW: USER ID " + clientHandler.getUserID() + " ---\n"
+		                         + "> CURRENT TOPIC: " + clientHandler.getTopic() + "\n"
+		                         + "> CURRENT ROLE:  " + clientHandler.getRole() + "\n"
+		                         + "> MESSAGES SENT: " + clientHandler.getNumMessagesSent() + "\n"
+		                         + "--- END OF USER DETAILS ---\n";
 		System.out.println(userInformation);
 	}
 
@@ -544,18 +562,14 @@ public class Server {
 	 *
 	 * @param clientHandler the client handler to show information for
 	 */
-	private void showUserInformation(ClientHandler clientHandler) {
-		String userInformation =
-				"--- USER ID " + clientHandler.getUserID() + " ---\n" +
-				"> CURRENT TOPIC: " + clientHandler.getTopic() + "\n" +
-				"> CURRENT ROLE:  " + clientHandler.getRole() + "\n" +
-				"> MESSAGES SENT: " + clientHandler.getNumMessagesSent() + "\n";
-		System.out.println(userInformation);
+	private String showUserInformation(ClientHandler clientHandler) {
+		return "--- USER ID " + clientHandler.getUserID() + " ---\n"
+		    + "> CURRENT TOPIC: " + clientHandler.getTopic() + "\n"
+		    + "> CURRENT ROLE:  " + clientHandler.getRole() + "\n"
+		    + "> MESSAGES SENT: " + clientHandler.getNumMessagesSent() + "\n";
 	}
 
-	public boolean isRunning() {
-		return serverRunning;
-	}
+	public boolean isRunning() { return serverRunning; }
 
 	/**
 	 * Checks if the server is currently inspecting the given topic.
@@ -563,9 +577,7 @@ public class Server {
 	 * @param topic the topic to check
 	 * @return true if the server is inspecting the topic, false otherwise
 	 */
-	public boolean isInspectingTopic(String topic) {
-		return isInspecting && topic.equals(currentInspectTopic);
-	}
+	public boolean isInspectingTopic(String topic) { return isInspecting && topic.equals(currentInspectTopic); }
 
 	/**
 	 * The main method to start the server.
