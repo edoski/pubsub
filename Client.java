@@ -197,13 +197,14 @@ public class Client {
 				return;
 			}
 
-			Scanner scanner = new Scanner(System.in);
-			System.out.print("> You are currently a '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n"
-			                 + "> Do you want to change your role and topic? (y/n): ");
-			String response = scanner.nextLine().toLowerCase();
-			if (!response.equalsIgnoreCase("y") && !response.equalsIgnoreCase("yes")) {
-				System.out.println("> OK. Registration unchanged.\n");
-				return;
+			try (Scanner scanner = new Scanner(System.in)) {
+				System.out.print("> You are currently a '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n"
+				                 + "> Do you want to change your role and topic? (y/n): ");
+				String response = scanner.nextLine().toLowerCase();
+				if (!response.equalsIgnoreCase("y") && !response.equalsIgnoreCase("yes")) {
+					System.out.println("> OK. Registration unchanged.\n");
+					return;
+				}
 			}
 		}
 

@@ -61,31 +61,32 @@ public class Server {
 	 * Allows the server operator to execute commands like inspect, listall, delete, etc.
 	 */
 	private void processCommand() {
-		Scanner scanner = new Scanner(System.in);
-		while (serverRunning) {
-			String commandLine = scanner.nextLine().trim();
-			// Empty commands are ignored
-			if (commandLine.isEmpty()) {
-				continue;
-			}
-			// Otherwise, command line split into tokens and processed
-			String[] tokens = commandLine.split("\\s+");
-			String command = tokens[0].toLowerCase();
+		try (Scanner scanner = new Scanner(System.in)) {
+			while (serverRunning) {
+				String commandLine = scanner.nextLine().trim();
+				// Empty commands are ignored
+				if (commandLine.isEmpty()) {
+					continue;
+				}
+				// Otherwise, command line split into tokens and processed
+				String[] tokens = commandLine.split("\\s+");
+				String command = tokens[0].toLowerCase();
 
-			switch (command) {
-			case "show" -> showTopics();
-			case "quit" -> shutdownServer();
-			case "inspect" -> startInspectMode(tokens);
-			case "end" -> endInspectMode();
-			case "listall" -> listAllMessagesInTopic();
-			case "delete" -> deleteMessage(tokens);
-			case "help" -> showHelp();
-			case "kick" -> kickClient(tokens);
-			case "clear" -> clearTopic();
-			case "export" -> export(tokens);
-			case "users" -> showAllUsersInformation();
-			case "user" -> showUserInformation(tokens);
-			default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
+				switch (command) {
+				case "show" -> showTopics();
+				case "quit" -> shutdownServer();
+				case "inspect" -> startInspectMode(tokens);
+				case "end" -> endInspectMode();
+				case "listall" -> listAllMessagesInTopic();
+				case "delete" -> deleteMessage(tokens);
+				case "help" -> showHelp();
+				case "kick" -> kickClient(tokens);
+				case "clear" -> clearTopic();
+				case "export" -> export(tokens);
+				case "users" -> showAllUsersInformation();
+				case "user" -> showUserInformation(tokens);
+				default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
+				}
 			}
 		}
 	}
@@ -370,13 +371,13 @@ public class Server {
 			return;
 		}
 
-		Scanner scanner = new Scanner(System.in);
-		System.out.print("> Are you sure you want to clear all messages in topic '" + topic + "'? (y/n): ");
-		if (!scanner.nextLine().equalsIgnoreCase("y")) {
-			System.out.println("> Clear operation cancelled.\n");
-			return;
+		try (Scanner scanner = new Scanner(System.in)) {
+			System.out.print("> Are you sure you want to clear all messages in topic '" + topic + "'? (y/n): ");
+			if (!scanner.nextLine().equalsIgnoreCase("y")) {
+				System.out.println("> Clear operation cancelled.\n");
+				return;
+			}
 		}
-
 		messages.clear();
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
 			if (clientHandler.publisherMessages.containsKey(topic)) {
