@@ -306,6 +306,11 @@ public class Server {
 	private void showHelp() {
 		StringBuilder help = new StringBuilder();
 		help.append("--- HELP: AVAILABLE COMMANDS ---\n");
+		help.append("> kick <userID>: Kick a client by ID\n");
+		help.append("> export user <userID>: Export all messages of a user to logs/user_exports\n");
+		help.append("> export topic <topic>: Export all messages of a topic to logs/topic_exports\n");
+		help.append("> users: Show all connected users and their details\n");
+		help.append("> user <userID>: Show details of a specific user\n");
 		if (isInspecting) {
 			help.append("> listall: List all messages in the topic\n");
 			help.append("> delete <messageId>: Delete a message by ID\n");
@@ -318,11 +323,6 @@ public class Server {
 			help.append("> inspect <topic>: Open interactive mode to inspect a topic (list all messages, delete messages, etc.)\n");
 			help.append("> quit: Disconnect from the server\n");
 		}
-		help.append("> kick <userID>: Kick a client by ID\n");
-		help.append("> export user <userID>: Export all messages of a user to logs/user_exports\n");
-		help.append("> export topic <topic>: Export all messages of a topic to logs/topic_exports\n");
-		help.append("> users: Show all connected users and their details\n");
-		help.append("> user <userID>: Show details of a specific user\n");
 		help.append("--- END OF HELP ---\n");
 		System.out.println(help);
 	}
