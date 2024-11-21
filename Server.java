@@ -102,7 +102,7 @@ public class Server {
 		}
 
 		if (ClientHandler.topics.isEmpty()) {
-			System.out.println("> No existingTopics available.\n");
+			System.out.println("> No existing topics available.\n");
 			return;
 		}
 

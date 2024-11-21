@@ -197,7 +197,8 @@ public class Client {
 				return;
 			}
 
-			try (Scanner scanner = new Scanner(System.in)) {
+			try {
+				Scanner scanner = new Scanner(System.in);
 				System.out.print("> You are currently a '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n"
 				                 + "> Do you want to change your role and topic? (y/n): ");
 				String response = scanner.nextLine().toLowerCase();
@@ -205,6 +206,9 @@ public class Client {
 					System.out.println("> OK. Registration unchanged.\n");
 					return;
 				}
+			}catch (Exception e) {
+				System.out.println("> Error reading from console: " + e.getMessage());
+				closeEverything();
 			}
 		}
 
