@@ -206,7 +206,7 @@ public class Client {
 					System.out.println("> OK. Registration unchanged.\n");
 					return;
 				}
-			}catch (Exception e) {
+			} catch (Exception e) {
 				System.out.println("> Error reading from console: " + e.getMessage());
 				closeEverything();
 			}
@@ -251,28 +251,27 @@ public class Client {
 		if (backlog.isEmpty()) {
 			return;
 		}
-		synchronized (backlog) {
-			backlog.sort((a, b) -> { // Sort "list" and "listall" commands to be executed last to avoid interleaving
-				if (a.startsWith("list") && !b.startsWith("list")) {
-					return 1;
-				}
-				if (!a.startsWith("list") && b.startsWith("list")) {
-					return -1;
-				}
-				return 0;
-			});
 
-			System.out.println("--- COMMANDS TO BE EXECUTED ---");
-			for (String cmd : backlog) {
-				System.out.println("> " + (backlog.indexOf(cmd) + 1) + ": " + cmd);
+		backlog.sort((a, b) -> { // Sort "list" and "listall" commands to be executed last to avoid interleaving
+			if (a.startsWith("list") && !b.startsWith("list")) {
+				return 1;
 			}
-			System.out.println();
+			if (!a.startsWith("list") && b.startsWith("list")) {
+				return -1;
+			}
+			return 0;
+		});
 
-			for (String cmd : backlog) {
-				processCommand(cmd);
-			}
-			backlog.clear();
+		System.out.println("--- COMMANDS TO BE EXECUTED ---");
+		for (String cmd : backlog) {
+			System.out.println("> " + (backlog.indexOf(cmd) + 1) + ": " + cmd);
 		}
+		System.out.println();
+
+		for (String cmd : backlog) {
+			processCommand(cmd);
+		}
+		backlog.clear();
 	}
 
 	/**
