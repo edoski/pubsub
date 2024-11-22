@@ -61,7 +61,7 @@ public class Server {
 	 * Allows the server operator to execute commands like inspect, listall, delete, etc.
 	 */
 	private void processCommand() {
-		try (Scanner scanner = new Scanner(System.in)) {
+		try(Scanner scanner = new Scanner(System.in)){
 			while (serverRunning) {
 				String commandLine = scanner.nextLine().trim();
 				// Empty commands are ignored
@@ -73,23 +73,26 @@ public class Server {
 				String command = tokens[0].toLowerCase();
 
 				switch (command) {
-				case "show" -> showTopics();
-				case "quit" -> shutdownServer();
-				case "inspect" -> startInspectMode(tokens);
-				case "end" -> endInspectMode();
-				case "listall" -> listAllMessagesInTopic();
-				case "delete" -> deleteMessage(tokens);
-				case "help" -> showHelp();
-				case "kick" -> kickClient(tokens);
-				case "clear" -> clearTopic();
-				case "export" -> export(tokens);
-				case "users" -> showAllUsersInformation();
-				case "user" -> showUserInformation(tokens);
-				default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
+					case "show" -> showTopics();
+					case "quit" -> shutdownServer();
+					case "inspect" -> startInspectMode(tokens);
+					case "end" -> endInspectMode();
+					case "listall" -> listAllMessagesInTopic();
+					case "delete" -> deleteMessage(tokens);
+					case "help" -> showHelp();
+					case "kick" -> kickClient(tokens);
+					case "clear" -> clearTopic(scanner);
+					case "export" -> export(tokens);
+					case "users" -> showAllUsersInformation();
+					case "user" -> showUserInformation(tokens);
+					default -> System.out.println("> Unknown command. Enter 'help' to see the list of available commands.\n");
 				}
 			}
+		} catch (IllegalStateException e) {
+			System.out.println("> Error processing command: " + e.getMessage());
 		}
 	}
+
 
 	/**
 	 * "show": Displays the list of existing topics.
@@ -358,7 +361,7 @@ public class Server {
 	 * "clear": Clears all messages in the topic currently being inspected.
 	 * Notifies clients in the topic about the deletion.
 	 */
-	private void clearTopic() {
+	private void clearTopic(Scanner scanner) {
 		if (!isInspecting) {
 			System.out.println("> Command 'clear' is only available in inspect mode.\n");
 			return;
@@ -371,12 +374,14 @@ public class Server {
 			return;
 		}
 
-		try (Scanner scanner = new Scanner(System.in)) {
+		try  {
 			System.out.print("> Are you sure you want to clear all messages in topic '" + topic + "'? (y/n): ");
 			if (!scanner.nextLine().equalsIgnoreCase("y")) {
 				System.out.println("> Clear operation cancelled.\n");
 				return;
 			}
+		} catch (IllegalStateException e) {
+			System.out.println("> Error processing command: " + e.getMessage());
 		}
 		messages.clear();
 		for (ClientHandler clientHandler : ClientHandler.clientHandlers.values()) {
@@ -387,6 +392,8 @@ public class Server {
 		}
 		System.out.println("> All messages in topic '" + topic + "' have been cleared.\n");
 	}
+
+
 
 	/**
 	 * "export": Exports messages for a user or topic to a text file.
