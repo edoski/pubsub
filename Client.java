@@ -102,7 +102,9 @@ public class Client {
 			if (!isPublisher && publisherOnlyCommands.contains(command)) {
 				System.out.println("> You cannot use the command '" + command + "' as a subscriber.\n");
 			} else {
-				System.out.println("> Command '" + inputLine + "' has been queued and will execute when Inspect mode is ended.\n");
+				System.out.println(command.equals("listall")
+				                       ? "> Command '" + inputLine + "' will execute last (to avoid inconsistencies) when Inspect mode is ended.\n"
+				                       : "> Command '" + inputLine + "' has been queued and will execute when Inspect mode is ended.\n");
 				backlog.add(inputLine);
 			}
 			return;
@@ -243,16 +245,27 @@ public class Client {
 
 	/**
 	 * Executes commands that were queued during server inspect mode.
+	 * Commands are executed in order, except for 'list' and 'listall' commands, executed last.
 	 */
 	private void executeBacklogCommands() {
 		if (backlog.isEmpty()) {
 			return;
 		}
 
+		backlog.sort((a, b) -> { // Sort "list" and "listall" commands to be executed last to avoid interleaving
+			if (a.startsWith("list") && !b.startsWith("list")) {
+				return 1;
+			}
+			if (!a.startsWith("list") && b.startsWith("list")) {
+				return -1;
+			}
+			return 0;
+		});
+
 		System.out.println("--- COMMANDS TO BE EXECUTED ---");
-		int i = 0;
+		int i = 1;
 		for (String cmd : backlog) {
-			System.out.println("> " + (++i) + ": " + cmd);
+			System.out.println("> " + (i++) + ": " + cmd);
 		}
 		System.out.println();
 
