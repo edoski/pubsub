@@ -23,6 +23,7 @@ public class Client {
 	private static final ArrayList<String> backlog = new ArrayList<>();
 	private static final ArrayList<String> publisherOnlyCommands = new ArrayList<>(Arrays.asList("send", "list"));
 	private static final ArrayList<String> disabledWhenInspecting = new ArrayList<>(Arrays.asList("send", "list", "listall"));
+	private final Scanner scanner = new Scanner(System.in);
 
 	/**
 	 * Constructs a Client with the specified socket connection.
@@ -49,7 +50,7 @@ public class Client {
 		receiveMessage(); // Start the receiveMessage thread
 
 		// Use the main thread for input handling
-		try (Scanner scanner = new Scanner(System.in)) {
+		try {
 			while (running) {
 				processCommand(scanner.nextLine());
 			}
@@ -198,7 +199,6 @@ public class Client {
 			}
 
 			try {
-				Scanner scanner = new Scanner(System.in);
 				System.out.print("> You are currently a '" + (isPublisher ? "publisher" : "subscriber") + "' for topic '" + topic + "'.\n"
 				                 + "> Do you want to change your role and topic? (y/n): ");
 				String response = scanner.nextLine().toLowerCase();
