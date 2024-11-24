@@ -126,11 +126,7 @@ public class ClientHandler implements Runnable {
 		// Important: Use StringBuilder to build the message and print it all at once, avoiding interleaving
 		StringBuilder messageOutput = new StringBuilder();
 		synchronized (publisherMessages) {
-			messageOutput.append("--- LIST: YOU SENT ")
-			    .append(publisherMessages.get(topic).size())
-			    .append(" MESSAGES IN '")
-			    .append(topic)
-			    .append("' ---\n\n");
+			messageOutput.append("--- LIST: YOU SENT " + publisherMessages.get(topic).size() + " MESSAGES IN '" + topic + "' ---\n\n");
 			for (Message msg : publisherMessages.get(topic)) {
 				messageOutput.append(msg.toString()).append("\n");
 			}

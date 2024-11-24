@@ -291,6 +291,7 @@ public class Client {
 				out.close();
 			}
 			backlog.clear(); // In case the client is closed before inspect mode ends (e.g. kicked)
+			scanner.close();
 			System.out.println("--- CLIENT SHUTDOWN ---");
 			System.exit(0);
 		} catch (IOException e) {

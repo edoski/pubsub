@@ -553,11 +553,12 @@ public class Server {
 			return;
 		}
 
-		String userInformation = "--- SHOW: USER ID " + clientHandler.getUserID() + " ---\n"
-		                         + "> CURRENT TOPIC: " + clientHandler.getTopic() + "\n"
-		                         + "> CURRENT ROLE:  " + clientHandler.getRole() + "\n"
-		                         + "> MESSAGES SENT: " + clientHandler.getNumMessagesSent() + "\n"
-		                         + "--- END OF USER DETAILS ---\n";
+		StringBuilder userInformation = new StringBuilder();
+		userInformation.append("--- SHOW: USER ID " + clientHandler.getUserID() + " ---\n")
+		    .append("> CURRENT TOPIC: " + clientHandler.getTopic() + "\n")
+		    .append("> CURRENT ROLE:  " + clientHandler.getRole() + "\n")
+		    .append("> MESSAGES SENT: " + clientHandler.getNumMessagesSent() + "\n")
+		    .append("--- END OF USER DETAILS ---");
 		System.out.println(userInformation);
 	}
 
